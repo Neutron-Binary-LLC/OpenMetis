@@ -57,6 +57,18 @@ def demo_usage():
     print(f"Expression: z^2 + 3z + 1 at z={z.item():.2f}")
     print(f"Differentiable derivative dy/dz: {dy_dz.item():.2f} (Expected: 2z + 3 = {2*z.item()+3:.2f})")
 
+    # Foundational Math Functions Demo
+    print("\n--- Foundational Math Functions Demo ---")
+    test_val = torch.tensor([1.0], requires_grad=True)
+    sin_val = block.apply_trigonometric(test_val, "sin")
+    exp_val = block.apply_exponential_log(test_val, "exp")
+    pow_val = block.apply_power(test_val, 2.0)
+    
+    print(f"Value: {test_val.item():.2f}")
+    print(f"sin(x): {sin_val.item():.4f} (Expected: {torch.sin(test_val).item():.4f})")
+    print(f"exp(x): {exp_val.item():.4f} (Expected: {torch.exp(test_val).item():.4f})")
+    print(f"pow(x, 2): {pow_val.item():.4f} (Expected: 1.0000)")
+
     # Inference with different depth
     print("\n--- Inference with Dynamic Depth ---")
     dynamic_iters = 8

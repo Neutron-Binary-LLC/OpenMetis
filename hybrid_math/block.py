@@ -86,6 +86,11 @@ class HybridRecurrentMathBlock(nn.Module):
         self.integral_head = nn.Linear(d_model, d_model)
         self.simplify_head = nn.Linear(d_model, d_model)
         
+        # New foundational math heads
+        self.trig_head = nn.Linear(d_model, d_model)      # sin, cos, tan
+        self.exp_log_head = nn.Linear(d_model, d_model)   # exp, log
+        self.pow_head = nn.Linear(d_model, d_model)       # power, sqrt
+        
         # Stability mechanism (LTI-style transformation)
         self.stability_gate = nn.Parameter(torch.ones(1) * 0.9)
         self.dropout_layer = nn.Dropout(dropout)
@@ -155,9 +160,12 @@ class HybridRecurrentMathBlock(nn.Module):
         deriv_feat = self.deriv_head(global_feat)
         integ_feat = self.integral_head(global_feat)
         simp_feat = self.simplify_head(global_feat)
+        trig_feat = self.trig_head(global_feat)
+        explog_feat = self.exp_log_head(global_feat)
+        pow_feat = self.pow_head(global_feat)
 
         # Combine proposals
-        math_update = deriv_feat + integ_feat + simp_feat
+        math_update = deriv_feat + integ_feat + simp_feat + trig_feat + explog_feat + pow_feat
 
         # Differentiable operations via autograd
         if workspace.numerical_values.requires_grad:
@@ -193,3 +201,28 @@ class HybridRecurrentMathBlock(nn.Module):
     def symbolic_integration_approx(self, expr_latent: torch.Tensor) -> torch.Tensor:
         """Approximate integration in latent space."""
         return torch.cumsum(expr_latent, dim=1) * 0.05
+
+    def apply_trigonometric(self, x: torch.Tensor, func_type: str = "sin") -> torch.Tensor:
+        """Apply foundational trigonometric functions."""
+        if func_type == "sin":
+            return torch.sin(x)
+        elif func_type == "cos":
+            return torch.cos(x)
+        elif func_type == "tan":
+            return torch.tan(x)
+        return x
+
+    def apply_exponential_log(self, x: torch.Tensor, func_type: str = "exp") -> torch.Tensor:
+        """Apply exponential or logarithmic functions."""
+        if func_type == "exp":
+            return torch.exp(x)
+        elif func_type == "log":
+            # Add epsilon for numerical stability
+            return torch.log(torch.abs(x) + 1e-8)
+        return x
+
+    def apply_power(self, x: torch.Tensor, exponent: float = 2.0) -> torch.Tensor:
+        """Apply power functions."""
+        if exponent == 0.5:
+            return torch.sqrt(torch.abs(x) + 1e-8)
+        return torch.pow(x, exponent)

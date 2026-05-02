@@ -10,86 +10,113 @@ The architecture features a recurrent loop that carries both a hidden state (neu
 
 ```mermaid
 graph LR
+
+    %% ================= INPUT =================
     subgraph Input_Space [Input Layer]
-        X[Input x: Batch, Seq, D_model]
+        direction TB
+        X[Input x<br/>Batch, Seq, D_model]
         InitWS[Initial Workspace]
     end
 
-    X --> RecurrentLoop
-    InitWS --> RecurrentLoop
+    %% ================= LOOP =================
+    subgraph RecurrentLoop [Recurrent Loop: Iteration 1 → N]
+        direction LR
 
-    subgraph RecurrentLoop [Recurrent Loop: Iteration 1 to N]
-        direction TB
-        
+        %% ---- Neural Path ----
         subgraph Neural_Core [Neural Processing Unit]
-            direction LR
+            direction TB
+
+            %% Attention Block
             subgraph AttnBlock [Self-Attention]
+                direction LR
                 Norm_A[LN] --> MHA[MHA] --> Drop_A[DO] --> Add_A[Add]
             end
-            
-            subgraph FFNBlock [FFN & MoE Layer]
+
+            %% FFN Block
+            subgraph FFNBlock [FFN / MoE]
+                direction LR
                 Norm_F[LN] --> Lin1[L+G] --> Drop_F1[DO] --> Lin2[L] --> Drop_F2[DO] --> Add_F[Add]
             end
-            
+
             Add_A --> Norm_F
         end
 
+        %% ---- Bridge ----
         subgraph Bridge_Workspace [Neuro-Symbolic Core]
             direction LR
+
+            %% Bridge
             subgraph NeuroSymbolic_Bridge [NS Bridge]
                 direction TB
-                Proj[Projector] --> Aug[Augmentor]
-                Router[Router] --> Experts
-                
-                subgraph Experts [Math Experts MoE]
-                    Alg[Alg]
-                    Calc[Calc]
-                    Num[Num]
-                    Ver[Ver]
-                end
-                
-                subgraph Math_Heads [Symbolic Heads]
-                    Deriv[Deriv]
-                    Integ[Integ]
-                    Simp[Simp]
-                    Update[Update]
-                end
+                Proj[Projector]
+                Aug[Augmentor]
+                Router[Router]
             end
 
+            %% Experts
+            subgraph Experts [Math Experts MoE]
+                direction LR
+                Alg[Alg] --- Calc[Calc] --- Num[Num] --- Ver[Ver]
+            end
+
+            %% Symbolic Heads
+            subgraph Math_Heads [Symbolic Heads]
+                direction LR
+                Deriv[Deriv] --- Integ[Integ] --- Simp[Simp] --- Trig[Trig] --- ExpLog[ExpLog] --- Pow[Pow] --- Update[Update]
+            end
+
+            %% Workspace State
             subgraph Workspace_State [Math Workspace]
                 direction TB
                 Latent[Latent]
                 NumSlots[NumSlots]
-                Conf[Conf]
-                Iter[Iter]
+                Conf[Confidence]
+                Iter[Iteration]
             end
         end
 
-        %% Connections within loop
-        Workspace_State --> Proj
-        Proj -- Latent --> Aug
+        %% ================= FLOW =================
+
+        %% Inputs into loop
+        X --> Norm_A
+        InitWS --> Latent
+
+        %% Neural → Bridge
         Add_A --> Aug
-        Aug --> FFNBlock
-        
-        FFNBlock --> Router
-        Router --> Experts
-        Experts -- Gated Sum --> Add_F
-        
+        Latent --> Proj --> Aug
+
+        %% Bridge → FFN
+        Aug --> Norm_F
+
+        %% FFN → Experts
+        Add_F --> Router --> Experts
+        Experts -->|Gated Sum| Add_F
+
+        %% Symbolic updates
         Add_F --> Math_Heads
-        Update -- Delta --> Latent
-        Deriv & Integ & Simp -- Proj --> NumSlots
-        Update -- Update --> Conf
+        Update -->|Delta| Latent
+        Deriv -->|Proj| NumSlots
+        Integ -->|Proj| NumSlots
+        Simp -->|Proj| NumSlots
+        Trig -->|Proj| NumSlots
+        ExpLog -->|Proj| NumSlots
+        Pow -->|Proj| NumSlots
+        Update -->|Update| Conf
+
     end
 
+    %% ================= OUTPUT =================
     RecurrentLoop --> Output[Final Hidden State]
-    RecurrentLoop --> FinalWS[Final MathWorkspace]
+    RecurrentLoop --> FinalWS[Final Workspace]
 
-    style RecurrentLoop fill:#1f1f1f,stroke:#d0d0d0,stroke-width:2px,color:#ffffff
+    %% ================= STYLING =================
+%%    style RecurrentLoop fill:#1f1f1f,stroke:#d0d0d0,stroke-width:2px,color:#ffffff
     style Workspace_State fill:#2a2a2a,stroke:#e0e0e0,stroke-width:2px,color:#ffffff
-    style Neural_Core fill:#262626,stroke:#cfcfcf,stroke-width:2px,color:#ffffff
+%%    style Neural_Core fill:#262626,stroke:#cfcfcf,stroke-width:2px,color:#ffffff
     style Experts fill:#303030,stroke:#f0f0f0,stroke-width:2px,color:#ffffff
-    style NeuroSymbolic_Bridge fill:#242424,stroke:#bfbfbf,stroke-width:2px,color:#ffffff
-    style Bridge_Workspace fill:#1a1a1a,stroke:#aaaaaa,stroke-width:2px,color:#ffffff
+%%    style Math_Heads fill:#1a1a1a,stroke:#f0f0f0,stroke-width:2px,color:#ffffff
+%%    style NeuroSymbolic_Bridge fill:#242424,stroke:#bfbfbf,stroke-width:2px,color:#ffffff
+%%    style Bridge_Workspace fill:#1a1a1a,stroke:#aaaaaa,stroke-width:2px,color:#ffffff
     style Input_Space fill:#141414,stroke:#999999,stroke-width:2px,color:#ffffff
 ```
 
@@ -134,8 +161,8 @@ sequenceDiagram
     - **Confidence Score**: Scalar indicating the model's certainty in its current mathematical state.
     - **Iteration Counter**: Tracks the number of recurrent steps taken.
 - **MoE Experts**: Specialized layers for different mathematical domains (Algebra, Calculus, etc.).
-- **Symbolic Heads**: Dedicated linear layers (`deriv_head`, `integral_head`, `simplify_head`) that propose modifications to the mathematical workspace.
-- **Differentiable Symbolic Ops**: Native support for operations like differentiation, integration approximation, and simplification proposals within the recurrent loop.
+- **Symbolic Heads**: Dedicated linear layers (`deriv_head`, `integral_head`, `simplify_head`, `trig_head`, `exp_log_head`, `pow_head`) that propose modifications to the mathematical workspace.
+- **Differentiable Symbolic Ops**: Native support for operations like differentiation, integration approximation, trigonometric functions, exponentials, and power laws within the recurrent loop.
 - **Stability**: Residual connections, layer normalization, and LTI-style gating to ensure gradient flow across depth.
 
 ## Installation
