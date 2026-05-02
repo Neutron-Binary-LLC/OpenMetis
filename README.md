@@ -120,6 +120,31 @@ python3 train_advanced.py --epochs 10 --lr 1e-4
 python3 train_advanced.py --epochs 20 --resume --checkpoint math_block_checkpoint.pth
 ```
 
+## Roadmap
+
+The development of the `HybridRecurrentMathBlock` is planned across several phases to evolve from a latent-state recycler to a full-fledged neuro-symbolic engine.
+
+### Phase 1: Foundation (Current)
+- [x] Recurrent block architecture with latent workspace.
+- [x] Mixture-of-Experts (MoE) routing for domain specialization.
+- [x] Basic differentiable symbolic operations (differentiation).
+- [x] Advanced training script with checkpointing and persistence.
+
+### Phase 2: Enhanced Symbolic Integration
+- [ ] **Tree-Based Workspace**: Transition from purely latent vectors to a hybrid representation involving explicit expression trees.
+- [ ] **Rule-Based Proposals**: Integrate a library of fixed algebraic rewrite rules (simplification, expansion) as a "Symbolic Expert".
+- [ ] **Dynamic Expert Scaling**: Support for plugging in external LLMs (e.g., Qwen2.5-Math) as specialized experts via API or local weights.
+
+### Phase 3: Reasoning & Verification
+- [ ] **Self-Correction Loop**: Implement a verification-driven update where the model retries iterations if the "Verification Expert" reports low confidence.
+- [ ] **Formal Verification**: Integrate with formal solvers like Z3 or Lean for hard constraint satisfaction within the loop.
+- [ ] **Curriculum Learning**: Training pipeline for gradually increasing mathematical complexity (from arithmetic to calculus).
+
+### Phase 4: Scaling & Deployment
+- [ ] **Flash-Recurrence**: Optimize the recurrent loop for faster inference and reduced memory footprint during training.
+- [ ] **Multi-Block Stacking**: Research on stacking multiple `HybridRecurrentMathBlocks` with hierarchical workspaces.
+- [ ] **Interpretable Reasoning Traces**: Tools to visualize and export the symbolic "scratchpad" evolution in human-readable LaTeX.
+
 ## Project Structure
 
 - `hybrid_math/`
