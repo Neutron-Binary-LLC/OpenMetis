@@ -237,6 +237,29 @@ python3 train_advanced.py --epochs 10 --lr 1e-4
 python3 train_advanced.py --epochs 20 --resume --checkpoint math_block_checkpoint.pth
 ```
 
+## Metis Black-Scholes Demo
+
+The `demo_metis_bs.py` script demonstrates a higher-level application: training a Metis-based model to perform Black-Scholes option pricing autonomously.
+
+### Key Features:
+- **Neuro-Symbolic Dataset**: Generates synthetic Black-Scholes data (S, K, T, r, sigma) and exact prices.
+- **Autonomous Inference**: Once trained, the model predicts prices by processing inputs through its `HybridRecurrentMathBlocks` without calling explicit math functions.
+- **Checkpoint Persistence**: Automatically saves and loads `metis_bs_model.pth`.
+- **Continuous Training**: Supports loading an existing model and performing additional training epochs.
+
+### Usage:
+
+```bash
+# Run inference using existing model (skips training if checkpoint exists)
+python3 demo_metis_bs.py
+
+# Force training even if model exists
+python3 demo_metis_bs.py --train
+
+# Customize training (e.g., 50 epochs with 5000 samples)
+python3 demo_metis_bs.py --train --epochs 50 --samples 5000
+```
+
 ## Roadmap
 
 The development of the `HybridRecurrentMathBlock` is planned across several phases to evolve from a latent-state recycler to a full-fledged neuro-symbolic engine.
@@ -269,6 +292,10 @@ The development of the `HybridRecurrentMathBlock` is planned across several phas
     - `block.py`: Main `HybridRecurrentMathBlock` implementation.
     - `workspace.py`: `MathWorkspace` class managing state.
     - `expression.py`: `MathExpression` and `SymbolicOp` utilities.
-- `demo.py`: Demonstration script showing forward pass and gradient verification.
+- `metis_model/`
+    - `model.py`: `OpenMythosHybridModel` implementation.
+    - `train_metis.py`: Main training script for Metis models.
+- `demo.py`: Basic demonstration script showing math heads and gradient verification.
+- `demo_metis_bs.py`: Black-Scholes pricing demo with autonomous model inference.
 - `train_sample.py`: A basic training script template.
 - `train_advanced.py`: Advanced training script with checkpointing and resuming capabilities.
