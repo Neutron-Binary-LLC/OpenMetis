@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from typing import Tuple, Optional, List, Dict, Any
-from hybrid_math.block import HybridRecurrentMathBlock
+from hybrid_math.block import HybridRecurrentMathBlock, MathConfig
 from hybrid_math.workspace import MathWorkspace
 
 class OpenMetisHybridModel(nn.Module):
@@ -11,43 +11,42 @@ class OpenMetisHybridModel(nn.Module):
     """
     def __init__(
         self,
-        vocab_size: int = 1000,
-        d_model: int = 512,
+        config: Optional[MathConfig] = None,
         num_layers: int = 4,
-        num_heads: int = 8,
-        num_iterations: int = 4,
-        workspace_dim: int = 256,
-        num_experts: int = 4,
-        dropout: float = 0.1,
-        device: torch.device = torch.device('cpu')
+        **kwargs
     ):
         super().__init__()
-        self.d_model = d_model
+        if config is None:
+            config = MathConfig(
+                vocab_size=kwargs.get("vocab_size", 1000),
+                dim=kwargs.get("d_model", 512),
+                n_heads=kwargs.get("num_heads", 8),
+                max_loop_iters=kwargs.get("num_iterations", 4),
+                workspace_dim=kwargs.get("workspace_dim", 256),
+                n_experts=kwargs.get("num_experts", 4),
+                dropout=kwargs.get("dropout", 0.1),
+                device=str(kwargs.get("device", "cpu"))
+            )
+        
+        self.config = config
+        self.d_model = config.dim
         self.num_layers = num_layers
-        self.device = device
+        self.device = torch.device(config.device)
         
         # Token embedding for symbolic input
-        self.embedding = nn.Embedding(vocab_size, d_model)
-        self.pos_encoding = nn.Parameter(torch.randn(1, 1024, d_model))
+        self.embedding = nn.Embedding(config.vocab_size, self.d_model)
+        self.pos_encoding = nn.Parameter(torch.randn(1, config.max_seq_len, self.d_model))
         
         # Stack of HybridRecurrentMathBlocks
         self.layers = nn.ModuleList([
-            HybridRecurrentMathBlock(
-                d_model=d_model,
-                num_heads=num_heads,
-                num_iterations=num_iterations,
-                workspace_dim=workspace_dim,
-                num_experts=num_experts,
-                dropout=dropout,
-                device=device
-            ) for _ in range(num_layers)
+            HybridRecurrentMathBlock(config=config) for _ in range(num_layers)
         ])
         
         # Output head
-        self.ln_f = nn.LayerNorm(d_model)
-        self.head = nn.Linear(d_model, vocab_size)
+        self.ln_f = nn.LayerNorm(self.d_model)
+        self.head = nn.Linear(self.d_model, config.vocab_size)
         
-        self.to(device)
+        self.to(self.device)
 
     def forward(
         self, 

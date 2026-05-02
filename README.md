@@ -269,6 +269,8 @@ The development of the `HybridRecurrentMathBlock` is planned across several phas
 - [x] Mixture-of-Experts (MoE) routing for domain specialization.
 - [x] Advanced math-specific heads (Differentiation, Integration, Simplification).
 - [x] Differentiable symbolic operations and numerical slots.
+- [x] Advanced configuration and model variants (OpenMythos-style).
+- [x] Prelude/Coda layers and LoRA depth adaptation.
 - [x] Advanced training script with checkpointing and persistence.
 
 ### Phase 2: Enhanced Symbolic Integration

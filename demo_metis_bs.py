@@ -110,8 +110,13 @@ def train_and_demo():
     loaded = False
     if os.path.exists(checkpoint_path):
         print(f"--- Loading existing model from {checkpoint_path} ---")
-        model.load_state_dict(torch.load(checkpoint_path, map_location=device))
-        loaded = True
+        try:
+            model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+            loaded = True
+        except Exception as e:
+            print(f"Failed to load checkpoint: {e}")
+            print("Starting fresh as architecture changed.")
+            loaded = False
     else:
         print("--- No existing model found ---")
 
