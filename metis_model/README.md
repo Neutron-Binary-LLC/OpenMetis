@@ -82,7 +82,7 @@ export PYTHONPATH=$PYTHONPATH:$(pwd)
 The training environment supports standard language modeling objectives augmented with workspace-aware losses.
 
 ```bash
-python3 mythos_model/train_mythos.py --epochs 10 --num_layers 4 --d_model 512
+python3 metis_model/train_metis.py --epochs 10 --num_layers 4 --d_model 512
 ```
 
 ## Recommended Experts

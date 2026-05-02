@@ -10,7 +10,7 @@ import sys
 # Add parent directory to path to import hybrid_math
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from mythos_model.model import OpenMythosHybridModel
+from metis_model.model import OpenMythosHybridModel
 from hybrid_math.workspace import MathWorkspace
 
 class MathDataset(Dataset):
