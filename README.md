@@ -19,7 +19,7 @@ graph TB
     InitWS --> RecurrentLoop
 
     subgraph RecurrentLoop [Recurrent Loop: Iteration 1 to N]
-        direction TB
+        direction LR
         
         subgraph Neural_Core [Neural Processing Unit]
             direction TB
@@ -44,30 +44,35 @@ graph TB
             Norm_F --> Lin1 --> Drop_F1 --> Lin2 --> Drop_F2 --> Add_F
         end
 
-        subgraph Workspace_State [Math Workspace]
-            Latent[Latent State: D_workspace]
-            NumSlots[Numerical Slots: N_slots]
-            Conf[Confidence Score]
-            Iter[Iteration Counter]
-        end
-
-        subgraph NeuroSymbolic_Bridge [Neuro-Symbolic Bridge]
-            Proj[Workspace Projector]
-            Aug[Sequence Augmentor: concat]
-            Router[MoE Router: Softmax]
-            
-            subgraph Experts [Math Experts MoE]
-                Alg[Algebra Expert: FFN]
-                Calc[Calculus Expert: FFN]
-                Num[Numerical Expert: FFN]
-                Ver[Verification Expert: FFN]
+        subgraph Bridge_Workspace [Neuro-Symbolic Core]
+            direction TB
+            subgraph NeuroSymbolic_Bridge [Neuro-Symbolic Bridge]
+                direction TB
+                Proj[Workspace Projector]
+                Aug[Sequence Augmentor: concat]
+                Router[MoE Router: Softmax]
+                
+                subgraph Experts [Math Experts MoE]
+                    Alg[Algebra Expert: FFN]
+                    Calc[Calculus Expert: FFN]
+                    Num[Numerical Expert: FFN]
+                    Ver[Verification Expert: FFN]
+                end
+                
+                subgraph Math_Heads [Symbolic Heads]
+                    Deriv[Differentiation Head]
+                    Integ[Integration Head]
+                    Simp[Simplification Head]
+                    Update[Workspace Updater]
+                end
             end
-            
-            subgraph Math_Heads [Symbolic Heads]
-                Deriv[Differentiation Head]
-                Integ[Integration Head]
-                Simp[Simplification Head]
-                Update[Workspace Updater]
+
+            subgraph Workspace_State [Math Workspace]
+                direction TB
+                Latent[Latent State: D_workspace]
+                NumSlots[Numerical Slots: N_slots]
+                Conf[Confidence Score]
+                Iter[Iteration Counter]
             end
         end
 
@@ -90,10 +95,13 @@ graph TB
     RecurrentLoop --> Output[Final Hidden State]
     RecurrentLoop --> FinalWS[Final MathWorkspace Object]
 
-    style RecurrentLoop fill:#f9f9f9,stroke:#333,stroke-width:2px
-    style Workspace_State fill:#e1f5fe,stroke:#01579b
-    style Neural_Core fill:#fff3e0,stroke:#e65100
-    style Experts fill:#f3e5f5,stroke:#4a148c
+    style RecurrentLoop fill:#2b2b2b,stroke:#555,stroke-width:2px,color:#fff
+    style Workspace_State fill:#1e3a5f,stroke:#3a7bd5,color:#fff
+    style Neural_Core fill:#3d2b1f,stroke:#d35400,color:#fff
+    style Experts fill:#2d1b33,stroke:#8e44ad,color:#fff
+    style NeuroSymbolic_Bridge fill:#1a2521,stroke:#27ae60,color:#fff
+    style Bridge_Workspace fill:#222,stroke:#444,color:#fff
+    style Input_Space fill:#1e1e1e,stroke:#444,color:#fff
 ```
 
 ### Sequence Diagram
