@@ -28,13 +28,15 @@ class BlackScholesDataset(Dataset):
         self.sigma = torch.rand(num_samples) * 0.4 + 0.1
         
         # Scaling inputs for better training
-        self.S_mean, self.S_std = 100.0, 20.0
-        self.K_mean, self.K_std = 100.0, 20.0
-        self.T_mean, self.T_std = 1.0, 1.0
-        self.r_mean, self.r_std = 0.05, 0.05
-        self.sigma_mean, self.sigma_std = 0.3, 0.2
+        self.S_mean, self.S_std = 100.0, 15.0
+        self.K_mean, self.K_std = 100.0, 15.0
+        self.T_mean, self.T_std = 1.0, 0.6
+        self.r_mean, self.r_std = 0.05, 0.03
+        self.sigma_mean, self.sigma_std = 0.3, 0.15
 
         self.prices = self._compute_exact_bs()
+        self.prices_mean = self.prices.mean()
+        self.prices_std = self.prices.std()
 
     def _compute_exact_bs(self):
         S, K, T, r, sigma = self.S, self.K, self.T, self.r, self.sigma
@@ -58,7 +60,9 @@ class BlackScholesDataset(Dataset):
             (self.r[idx] - self.r_mean) / self.r_std,
             (self.sigma[idx] - self.sigma_mean) / self.sigma_std
         ])
-        return inputs, self.prices[idx] / 10.0 # Scale target price
+        # Return standardized price
+        target = (self.prices[idx] - self.prices_mean) / self.prices_std
+        return inputs, target
 
 class MetisBSModel(nn.Module):
     """
@@ -67,17 +71,31 @@ class MetisBSModel(nn.Module):
     def __init__(self, d_model=256, num_layers=2):
         super().__init__()
         self.d_model = d_model
-        # Use a linear layer to project the 5 inputs into the model's d_model
-        self.input_projection = nn.Linear(1, d_model)
+        # Use a more expressive input projection (MLP instead of single linear)
+        self.input_projection = nn.Sequential(
+            nn.Linear(1, d_model),
+            nn.GELU(),
+            nn.Linear(d_model, d_model)
+        )
+        
+        # Positional encoding for the 5 parameters
+        self.param_encoding = nn.Parameter(torch.randn(1, 5, d_model))
         
         # We use a small version of the hybrid model
         # Instead of token IDs, we will pass projected embeddings directly to the layers
         self.layers = nn.ModuleList([
-            HybridRecurrentMathBlock(d_model=d_model, num_iterations=4)
+            HybridRecurrentMathBlock(d_model=d_model, num_iterations=12) 
             for _ in range(num_layers)
         ])
         
-        self.output_head = nn.Linear(d_model, 1)
+        # More expressive output head
+        self.output_head = nn.Sequential(
+            nn.Linear(d_model, d_model * 2),
+            nn.GELU(),
+            nn.Linear(d_model * 2, d_model),
+            nn.GELU(),
+            nn.Linear(d_model, 1)
+        )
 
     def forward(self, x):
         # x: (batch, 5) -> 5 parameters
@@ -85,11 +103,10 @@ class MetisBSModel(nn.Module):
         # Treat each parameter as a 'token' in a sequence of length 5
         x = x.unsqueeze(-1) # (batch, 5, 1)
         h = self.input_projection(x) # (batch, 5, d_model)
+        h = h + self.param_encoding
         
-        workspaces = []
         for layer in self.layers:
             h, ws = layer(h)
-            workspaces.append(ws)
             
         # Predict price from the global representation (mean pool)
         out = self.output_head(h.mean(dim=1)) # (batch, 1)
@@ -131,23 +148,38 @@ def train_and_demo():
         dataset = BlackScholesDataset(num_samples=args.samples)
         train_loader = DataLoader(dataset, batch_size=32, shuffle=True)
         
-        optimizer = optim.Adam(model.parameters(), lr=1e-3)
-        criterion = nn.MSELoss()
+        optimizer = optim.AdamW(model.parameters(), lr=5e-4, weight_decay=1e-5) # Slightly lower LR
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
+        criterion = nn.HuberLoss(delta=1.0)
         
         model.train()
+        best_loss = float('inf')
         for epoch in range(args.epochs):
             total_loss = 0
             for inputs, targets in train_loader:
                 inputs, targets = inputs.to(device), targets.to(device)
+                
+                # Add tiny noise to inputs for better generalization
+                if model.training:
+                    inputs = inputs + torch.randn_like(inputs) * 0.01
+
                 optimizer.zero_grad()
                 outputs = model(inputs)
                 loss = criterion(outputs, targets)
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5) # Tighter clipping
                 optimizer.step()
                 total_loss += loss.item()
             
+            avg_loss = total_loss / len(train_loader)
+            scheduler.step()
+            
+            if avg_loss < best_loss:
+                best_loss = avg_loss
+                torch.save(model.state_dict(), checkpoint_path)
+                
             if (epoch + 1) % 10 == 0 or epoch == 0:
-                print(f"Epoch {epoch+1}/{args.epochs}, Loss: {total_loss/len(train_loader):.6f}")
+                print(f"Epoch {epoch+1}/{args.epochs}, Loss: {avg_loss:.6f}, LR: {scheduler.get_last_lr()[0]:.6f}")
 
         # Save model
         torch.save(model.state_dict(), checkpoint_path)
@@ -161,15 +193,18 @@ def train_and_demo():
     # Normalize inputs as done in dataset
     S_val, K_val, T_val, r_val, sigma_val = 100.0, 105.0, 1.0, 0.05, 0.2
     test_input = torch.tensor([[
-        (S_val - 100.0) / 20.0,
-        (K_val - 100.0) / 20.0,
-        (T_val - 1.0) / 1.0,
-        (r_val - 0.05) / 0.05,
-        (sigma_val - 0.3) / 0.2
+        (S_val - 100.0) / 15.0,
+        (K_val - 100.0) / 15.0,
+        (T_val - 1.0) / 0.6,
+        (r_val - 0.05) / 0.03,
+        (sigma_val - 0.3) / 0.15
     ]], device=device)
     
     with torch.no_grad():
-        predicted_price = model(test_input) * 10.0 # Rescale output
+        # Rescale prediction
+        predicted_std = dataset.prices_std.to(device)
+        predicted_mean = dataset.prices_mean.to(device)
+        predicted_price = model(test_input) * predicted_std + predicted_mean
     
     # Calculate exact for comparison
     exact_dataset = BlackScholesDataset(num_samples=1)
