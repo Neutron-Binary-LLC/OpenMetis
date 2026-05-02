@@ -75,5 +75,50 @@ def demo_usage():
     hidden_out_deep, _ = block(x, num_iterations=dynamic_iters)
     print(f"Successfully ran with {dynamic_iters} iterations.")
 
+def black_scholes_demo(block: HybridRecurrentMathBlock):
+    print("\n--- Black-Scholes Calculation using HybridRecurrentMathBlock ---")
+    
+    # Parameters: S (Spot), K (Strike), T (Time to maturity), r (Risk-free rate), sigma (Volatility)
+    S = torch.tensor([100.0], requires_grad=True)
+    K = torch.tensor([105.0], requires_grad=True)
+    T = torch.tensor([1.0], requires_grad=True)
+    r = torch.tensor([0.05], requires_grad=True)
+    sigma = torch.tensor([0.2], requires_grad=True)
+    
+    # d1 = (ln(S/K) + (r + sigma^2 / 2) * T) / (sigma * sqrt(T))
+    # d2 = d1 - sigma * sqrt(T)
+    
+    # Calculate using block's math operations
+    ln_S_K = block.apply_exponential_log(S / K, "log")
+    sigma_sq = block.apply_power(sigma, 2.0)
+    sqrt_T = block.apply_power(T, 0.5)
+    
+    d1 = (ln_S_K + (r + sigma_sq / 2.0) * T) / (sigma * sqrt_T)
+    d2 = d1 - sigma * sqrt_T
+    
+    # Normal CDF approximation or torch.special.erf
+    def norm_cdf(x):
+        return 0.5 * (1.0 + torch.erf(x / torch.sqrt(torch.tensor([2.0]))))
+    
+    phi_d1 = norm_cdf(d1)
+    phi_d2 = norm_cdf(d2)
+    
+    # Call Price = S * N(d1) - K * exp(-r * T) * N(d2)
+    exp_minus_rt = block.apply_exponential_log(-r * T, "exp")
+    call_price = S * phi_d1 - K * exp_minus_rt * phi_d2
+    
+    print(f"Inputs: S={S.item()}, K={K.item()}, T={T.item()}, r={r.item()}, sigma={sigma.item()}")
+    print(f"Calculated Call Price: {call_price.item():.4f}")
+    
+    # Verify gradient flow
+    call_price.backward()
+    print(f"Vega (dPrice/dSigma): {sigma.grad.item():.4f}")
+    print(f"Delta (dPrice/dS): {S.grad.item():.4f}")
+
 if __name__ == "__main__":
     demo_usage()
+    
+    # Initialize block for Black-Scholes demo
+    d_model = 256
+    block = HybridRecurrentMathBlock(d_model=d_model)
+    black_scholes_demo(block)
