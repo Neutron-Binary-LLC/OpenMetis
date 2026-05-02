@@ -22,14 +22,26 @@ graph TB
         direction TB
         
         subgraph Neural_Core [Neural Processing Unit]
-            Attn[Multi-Head Self-Attention]
-            Norm1[LayerNorm]
-            FFN[Feed-Forward Network]
-            Norm2[LayerNorm]
+            direction TB
+            subgraph AttnBlock [Self-Attention Layer]
+                Norm_A[LayerNorm]
+                MHA[Multi-Head Self-Attention]
+                Drop_A[Dropout]
+                Add_A[Residual Add]
+            end
             
-            Attn --> Norm1
-            Norm1 --> FFN
-            FFN --> Norm2
+            subgraph FFNBlock [Feed-Forward & MoE Layer]
+                Norm_F[LayerNorm]
+                Lin1[Linear + GELU]
+                Drop_F1[Dropout]
+                Lin2[Linear]
+                Drop_F2[Dropout]
+                Add_F[Residual Add]
+            end
+            
+            Norm_A --> MHA --> Drop_A --> Add_A
+            Add_A --> Norm_F
+            Norm_F --> Lin1 --> Drop_F1 --> Lin2 --> Drop_F2 --> Add_F
         end
 
         subgraph Workspace_State [Math Workspace]
@@ -41,35 +53,37 @@ graph TB
 
         subgraph NeuroSymbolic_Bridge [Neuro-Symbolic Bridge]
             Proj[Workspace Projector]
-            Update[Workspace Updater]
-            Router[MoE Router]
+            Aug[Sequence Augmentor: concat]
+            Router[MoE Router: Softmax]
             
             subgraph Experts [Math Experts MoE]
-                Alg[Algebra Expert]
-                Calc[Calculus Expert]
-                Num[Numerical Expert]
-                Ver[Verification Expert]
+                Alg[Algebra Expert: FFN]
+                Calc[Calculus Expert: FFN]
+                Num[Numerical Expert: FFN]
+                Ver[Verification Expert: FFN]
             end
             
             subgraph Math_Heads [Symbolic Heads]
                 Deriv[Differentiation Head]
                 Integ[Integration Head]
                 Simp[Simplification Head]
+                Update[Workspace Updater]
             end
         end
 
         %% Connections within loop
         Workspace_State --> Proj
-        Proj -- Latent Injection --> Attn
-        Norm2 --> Router
+        Proj -- Latent Embedding --> Aug
+        Add_A --> Aug
+        Aug --> FFNBlock
+        
+        FFNBlock --> Router
         Router --> Experts
-        Experts -- Refined Hidden State --> Norm2
+        Experts -- Gated Experts Sum --> Add_F
         
-        Norm2 --> Math_Heads
-        Math_Heads --> Update
-        Update -- Delta Update --> Workspace_State
-        
-        Math_Heads -- Numerical Grad/Values --> NumSlots
+        Add_F --> Math_Heads
+        Update -- Delta Latent --> Latent
+        Deriv & Integ & Simp -- Numerical Projections --> NumSlots
         Update -- Conf Update --> Conf
     end
 
