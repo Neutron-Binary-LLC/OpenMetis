@@ -1,9 +1,12 @@
+from dataclasses import dataclass
+from typing import Tuple, Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Tuple, Dict, Optional, Any, List, Union
-from dataclasses import dataclass, field
+
 from .workspace import MathWorkspace
+
 
 @dataclass
 class MathConfig:
@@ -73,6 +76,129 @@ class MoERouter(nn.Module):
         logits = self.router(x)
         weights = F.softmax(logits, dim=-1)
         return weights, logits
+
+class RMSNorm(nn.Module):
+    """Root Mean Square Layer Normalization (no bias, no mean subtraction)."""
+
+    def __init__(self, dim: int, eps: float = 1e-6) -> None:
+        """Create an RMSNorm layer.
+
+        Args:
+            dim: Feature dimension to normalise over (the last axis of input).
+            eps: Stability constant added before the reciprocal square-root to
+                 prevent division by zero when the RMS is near zero.
+        """
+        super().__init__()
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(dim))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Normalise *x* by its root-mean-square and apply a learnable scale.
+
+        Args:
+            x: Input tensor of arbitrary shape ``[..., dim]``.
+
+        Returns:
+            Normalised tensor, same shape as *x*.
+        """
+        rms = x.pow(2).mean(-1, keepdim=True).add(self.eps).rsqrt()
+        return x * rms * self.weight
+
+class RotaryEmbedding(nn.Module):
+    """Rotary Position Embedding (RoPE) with lazy cache extension.
+
+    Args:
+        dim:         Per-head dimension (head_dim).
+        max_seq_len: Initial cache size.
+        base:        Frequency base (default 10 000).
+    """
+
+    def __init__(
+            self, dim: int, max_seq_len: int = 8_192, base: float = 10_000.0
+    ) -> None:
+        """Initialise RoPE and pre-compute the cos/sin cache.
+
+        Args:
+            dim:         Per-head dimension.  Must be even.
+            max_seq_len: Number of positions to cache on construction.  The
+                         cache doubles automatically when a longer sequence
+                         is encountered.
+            base:        Frequency base θ.  Higher values slow the rotation
+                         rate, extending effective context length.
+        """
+        super().__init__()
+        self.dim = dim
+        inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))
+        self.register_buffer("inv_freq", inv_freq, persistent=False)
+        self._build_cache(max_seq_len)
+
+    def _build_cache(self, seq_len: int) -> None:
+        """Pre-compute and register ``_cos`` / ``_sin`` buffers up to *seq_len*.
+
+        Called once at init and again (doubling capacity) whenever ``forward``
+        is asked for a sequence longer than the current cache.
+
+        Args:
+            seq_len: Number of positions to pre-compute.
+        """
+        t = torch.arange(
+            seq_len, device=self.inv_freq.device, dtype=self.inv_freq.dtype
+        )
+        freqs = torch.einsum("i,j->ij", t, self.inv_freq)  # [T, dim/2]
+        emb = torch.cat([freqs, freqs], dim=-1)  # [T, dim]
+        self.register_buffer("_cos", emb.cos()[None, None], persistent=False)
+        self.register_buffer("_sin", emb.sin()[None, None], persistent=False)
+
+    def forward(self, seq_len: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Return cached (cos, sin) tables for the first *seq_len* positions.
+
+        Args:
+            seq_len: Number of positions required.
+
+        Returns:
+            Tuple of ``(cos, sin)``, each shaped ``[1, 1, seq_len, dim]``,
+            ready to broadcast with ``[B, H, T, dim]`` query / key tensors.
+        """
+        if seq_len > self._cos.shape[2]:
+            self._build_cache(seq_len * 2)
+        return self._cos[:, :, :seq_len], self._sin[:, :, :seq_len]
+
+def _rotate_half(x: torch.Tensor) -> torch.Tensor:
+    """Return *x* with its last dimension split and swapped with negation.
+
+    Given ``x = [x₁, x₂]`` (each half of the last dim), returns
+    ``[-x₂, x₁]``.  Combined with the cos/sin multiply in
+    :func:`apply_rotary_emb` this implements the 2-D rotation matrix
+    that defines RoPE.
+
+    Args:
+        x: Tensor with an even-sized last dimension.
+
+    Returns:
+        Rotated tensor with the same shape as *x*.
+    """
+    half = x.shape[-1] // 2
+    return torch.cat([-x[..., half:], x[..., :half]], dim=-1)
+
+def apply_rotary_emb(
+        x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor
+) -> torch.Tensor:
+    """Apply Rotary Position Embeddings in-place to query or key tensors.
+
+    Implements ``x_rot = x * cos + rotate_half(x) * sin``, which is
+    equivalent to multiplying each consecutive pair of dimensions by a
+    2-D rotation matrix whose angle depends on the sequence position and
+    the dimension's frequency.
+
+    Args:
+        x:   Query or key tensor, shape ``[B, H, T, d]``.
+        cos: Pre-computed cosines, shape ``[1, 1, T, d]``.
+        sin: Pre-computed sines,   shape ``[1, 1, T, d]``.
+
+    Returns:
+        Rotated tensor with the same shape and dtype as *x*.
+    """
+    return x * cos + _rotate_half(x) * sin
 
 class HybridRecurrentMathBlock(nn.Module):
     """
@@ -155,134 +281,6 @@ class HybridRecurrentMathBlock(nn.Module):
         self.lora_b = nn.Parameter(torch.zeros(config.max_loop_iters, config.lora_rank, self.d_model))
         
         self.to(self.device)
-
-    # ---------------------------------------------------------------------------
-    # Primitives
-    # ---------------------------------------------------------------------------
-
-    class RMSNorm(nn.Module):
-        """Root Mean Square Layer Normalization (no bias, no mean subtraction)."""
-
-        def __init__(self, dim: int, eps: float = 1e-6) -> None:
-            """Create an RMSNorm layer.
-
-            Args:
-                dim: Feature dimension to normalise over (the last axis of input).
-                eps: Stability constant added before the reciprocal square-root to
-                     prevent division by zero when the RMS is near zero.
-            """
-            super().__init__()
-            self.eps = eps
-            self.weight = nn.Parameter(torch.ones(dim))
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Normalise *x* by its root-mean-square and apply a learnable scale.
-
-            Args:
-                x: Input tensor of arbitrary shape ``[..., dim]``.
-
-            Returns:
-                Normalised tensor, same shape as *x*.
-            """
-            rms = x.pow(2).mean(-1, keepdim=True).add(self.eps).rsqrt()
-            return x * rms * self.weight
-
-    class RotaryEmbedding(nn.Module):
-        """Rotary Position Embedding (RoPE) with lazy cache extension.
-
-        Args:
-            dim:         Per-head dimension (head_dim).
-            max_seq_len: Initial cache size.
-            base:        Frequency base (default 10 000).
-        """
-
-        def __init__(
-                self, dim: int, max_seq_len: int = 8_192, base: float = 10_000.0
-        ) -> None:
-            """Initialise RoPE and pre-compute the cos/sin cache.
-
-            Args:
-                dim:         Per-head dimension.  Must be even.
-                max_seq_len: Number of positions to cache on construction.  The
-                             cache doubles automatically when a longer sequence
-                             is encountered.
-                base:        Frequency base θ.  Higher values slow the rotation
-                             rate, extending effective context length.
-            """
-            super().__init__()
-            self.dim = dim
-            inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))
-            self.register_buffer("inv_freq", inv_freq, persistent=False)
-            self._build_cache(max_seq_len)
-
-        def _build_cache(self, seq_len: int) -> None:
-            """Pre-compute and register ``_cos`` / ``_sin`` buffers up to *seq_len*.
-
-            Called once at init and again (doubling capacity) whenever ``forward``
-            is asked for a sequence longer than the current cache.
-
-            Args:
-                seq_len: Number of positions to pre-compute.
-            """
-            t = torch.arange(
-                seq_len, device=self.inv_freq.device, dtype=self.inv_freq.dtype
-            )
-            freqs = torch.einsum("i,j->ij", t, self.inv_freq)  # [T, dim/2]
-            emb = torch.cat([freqs, freqs], dim=-1)  # [T, dim]
-            self.register_buffer("_cos", emb.cos()[None, None], persistent=False)
-            self.register_buffer("_sin", emb.sin()[None, None], persistent=False)
-
-        def forward(self, seq_len: int) -> Tuple[torch.Tensor, torch.Tensor]:
-            """Return cached (cos, sin) tables for the first *seq_len* positions.
-
-            Args:
-                seq_len: Number of positions required.
-
-            Returns:
-                Tuple of ``(cos, sin)``, each shaped ``[1, 1, seq_len, dim]``,
-                ready to broadcast with ``[B, H, T, dim]`` query / key tensors.
-            """
-            if seq_len > self._cos.shape[2]:
-                self._build_cache(seq_len * 2)
-            return self._cos[:, :, :seq_len], self._sin[:, :, :seq_len]
-
-    def _rotate_half(x: torch.Tensor) -> torch.Tensor:
-        """Return *x* with its last dimension split and swapped with negation.
-
-        Given ``x = [x₁, x₂]`` (each half of the last dim), returns
-        ``[-x₂, x₁]``.  Combined with the cos/sin multiply in
-        :func:`apply_rotary_emb` this implements the 2-D rotation matrix
-        that defines RoPE.
-
-        Args:
-            x: Tensor with an even-sized last dimension.
-
-        Returns:
-            Rotated tensor with the same shape as *x*.
-        """
-        half = x.shape[-1] // 2
-        return torch.cat([-x[..., half:], x[..., :half]], dim=-1)
-
-    def apply_rotary_emb(
-            x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor
-    ) -> torch.Tensor:
-        """Apply Rotary Position Embeddings in-place to query or key tensors.
-
-        Implements ``x_rot = x * cos + rotate_half(x) * sin``, which is
-        equivalent to multiplying each consecutive pair of dimensions by a
-        2-D rotation matrix whose angle depends on the sequence position and
-        the dimension's frequency.
-
-        Args:
-            x:   Query or key tensor, shape ``[B, H, T, d]``.
-            cos: Pre-computed cosines, shape ``[1, 1, T, d]``.
-            sin: Pre-computed sines,   shape ``[1, 1, T, d]``.
-
-        Returns:
-            Rotated tensor with the same shape and dtype as *x*.
-        """
-        return x * cos + _rotate_half(x) * sin
-
 
 
     def forward(
