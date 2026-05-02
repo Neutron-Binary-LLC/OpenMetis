@@ -1,6 +1,6 @@
-# OpenMythos Hybrid Architecture
+# OpenMetis Hybrid Architecture
 
-OpenMythos is a deep neuro-symbolic model built upon the `HybridRecurrentMathBlock`. It stacks multiple recurrent layers, each maintaining its own mathematical workspace, to solve complex, multi-step symbolic reasoning tasks.
+OpenMetis is a deep neuro-symbolic model built upon the `HybridRecurrentMathBlock`. It stacks multiple recurrent layers, each maintaining its own mathematical workspace, to solve complex, multi-step symbolic reasoning tasks.
 
 ## Architecture Overview
 
@@ -12,7 +12,7 @@ The model follows a hierarchical structure where each layer processes the sequen
 graph TD
     Input[Token IDs] --> Emb[Embedding + Pos Encoding]
     
-    subgraph MythosStack [OpenMythos Stacked Layers]
+    subgraph MythosStack [OpenMetis Stacked Layers]
         direction TB
         Layer1[HybridRecurrentBlock 1]
         Layer2[HybridRecurrentBlock 2]
@@ -44,7 +44,7 @@ graph TD
 ```mermaid
 sequenceDiagram
     participant U as User/Data
-    participant M as OpenMythosModel
+    participant M as OpenMetisModel
     participant L as HybridLayers
     participant W as LayerWorkspaces
     

@@ -4,9 +4,9 @@ from typing import Tuple, Optional, List, Dict, Any
 from hybrid_math.block import HybridRecurrentMathBlock
 from hybrid_math.workspace import MathWorkspace
 
-class OpenMythosHybridModel(nn.Module):
+class OpenMetisHybridModel(nn.Module):
     """
-    OpenMythos-style model that stacks multiple HybridRecurrentMathBlocks
+    OpenMetis-style model that stacks multiple HybridRecurrentMathBlocks
     to enable deep hierarchical mathematical reasoning.
     """
     def __init__(
@@ -76,7 +76,7 @@ class OpenMythosHybridModel(nn.Module):
 
 if __name__ == "__main__":
     # Quick sanity check
-    model = OpenMythosHybridModel(vocab_size=100, d_model=128, num_layers=2)
+    model = OpenMetisHybridModel(vocab_size=100, d_model=128, num_layers=2)
     dummy_input = torch.randint(0, 100, (2, 10))
     logits, workspaces = model(dummy_input)
     print(f"Logits shape: {logits.shape}")

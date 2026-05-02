@@ -10,7 +10,7 @@ import sys
 # Add parent directory to path to import hybrid_math
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from metis_model.model import OpenMythosHybridModel
+from metis_model.model import OpenMetisHybridModel
 from hybrid_math.workspace import MathWorkspace
 
 class MathDataset(Dataset):
@@ -29,7 +29,7 @@ class MathDataset(Dataset):
         return self.data[idx], self.targets[idx]
 
 def train():
-    parser = argparse.ArgumentParser(description="OpenMythos Training Script")
+    parser = argparse.ArgumentParser(description="OpenMetis Training Script")
     parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--lr", type=float, default=1e-4)
@@ -43,7 +43,7 @@ def train():
     print(f"Training on: {device}")
 
     # Initialize model
-    model = OpenMythosHybridModel(
+    model = OpenMetisHybridModel(
         vocab_size=args.vocab_size,
         d_model=args.d_model,
         num_layers=args.num_layers,
