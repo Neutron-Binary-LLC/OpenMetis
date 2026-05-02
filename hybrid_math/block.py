@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List, Dict, Any
 
 import torch
 import torch.nn as nn
@@ -60,7 +60,9 @@ class MathExpert(nn.Module):
             nn.Dropout(0.1)
         )
         
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, debug: bool = False) -> torch.Tensor:
+        if debug:
+            print(f"[MathExpert Trace] Type: {self.expert_type}, Input shape: {x.shape}, Mean: {x.mean().item():.4f}")
         return self.net(x)
 
 class MoERouter(nn.Module):
@@ -287,8 +289,9 @@ class HybridRecurrentMathBlock(nn.Module):
         self, 
         x: torch.Tensor, 
         math_state_init: Optional[MathWorkspace] = None,
-        num_iterations: Optional[int] = None
-    ) -> Tuple[torch.Tensor, MathWorkspace]:
+        num_iterations: Optional[int] = None,
+        debug: bool = False
+    ) -> Tuple[torch.Tensor, MathWorkspace, Optional[List[Dict[str, Any]]]]:
         """
         x: (batch, seq_len, d_model)
         num_iterations: Override default iterations at inference time.
@@ -296,6 +299,8 @@ class HybridRecurrentMathBlock(nn.Module):
         batch_size, seq_len, _ = x.shape
         iters = num_iterations if num_iterations is not None else self.num_iterations
         
+        trace = [] if debug else None
+
         # 0. Prelude (Standard Transformer layers)
         for layer in self.prelude:
             x = layer(x)
@@ -331,11 +336,21 @@ class HybridRecurrentMathBlock(nn.Module):
             h_ffn = self.ffn(h_augmented)
             
             # Route based on the augmented state
-            exp_weights, _ = self.router(h_ffn) # (batch, seq_len+1, num_experts)
+            exp_weights, exp_logits = self.router(h_ffn) # (batch, seq_len+1, num_experts)
             
-            expert_outputs = torch.stack([expert(h_ffn) for expert in self.experts], dim=-1) # (B, S+1, D, E)
+            expert_outputs = torch.stack([expert(h_ffn, debug=debug) for expert in self.experts], dim=-1) # (B, S+1, D, E)
             combined_expert_out = torch.sum(expert_outputs * exp_weights.unsqueeze(2), dim=-1)
             
+            if debug:
+                iter_trace = {
+                    "iteration": i,
+                    "expert_weights": exp_weights.detach().cpu(),
+                    "expert_logits": exp_logits.detach().cpu(),
+                    "input_mean": h_ffn.mean().item(),
+                    "input_std": h_ffn.std().item()
+                }
+                trace.append(iter_trace)
+
             # Residual connection and stabilization
             # Trim back to original sequence length for the main hidden state
             h = self.norm2(residual + self.dropout_layer(combined_expert_out[:, :seq_len, :]))
@@ -357,7 +372,7 @@ class HybridRecurrentMathBlock(nn.Module):
         for layer in self.coda:
             h = layer(h)
             
-        return h, workspace
+        return h, workspace, trace
 
     def _perform_math_operations(self, h: torch.Tensor, workspace: MathWorkspace) -> torch.Tensor:
         """Core neuro-symbolic math engine."""

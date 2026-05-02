@@ -52,32 +52,36 @@ class OpenMetisHybridModel(nn.Module):
         self, 
         input_ids: torch.Tensor, 
         workspaces: Optional[List[MathWorkspace]] = None,
-        num_iterations: Optional[int] = None
-    ) -> Tuple[torch.Tensor, List[MathWorkspace]]:
+        num_iterations: Optional[int] = None,
+        debug: bool = False
+    ) -> Tuple[torch.Tensor, List[MathWorkspace], List[Optional[List[Dict[str, Any]]]]]:
         """
         Forward pass through the stacked hybrid blocks.
-        Returns logits and a list of workspaces (one per layer).
+        Returns logits, a list of workspaces (one per layer), and a list of traces (one per layer).
         """
         b, t = input_ids.shape
         x = self.embedding(input_ids) + self.pos_encoding[:, :t, :]
         
         new_workspaces = []
+        traces = []
         
         for i, layer in enumerate(self.layers):
             ws_init = workspaces[i] if workspaces is not None else None
-            x, ws = layer(x, math_state_init=ws_init, num_iterations=num_iterations)
+            x, ws, tr = layer(x, math_state_init=ws_init, num_iterations=num_iterations, debug=debug)
             new_workspaces.append(ws)
+            traces.append(tr)
             
         x = self.ln_f(x)
         logits = self.head(x)
         
-        return logits, new_workspaces
+        return logits, new_workspaces, traces
 
 if __name__ == "__main__":
     # Quick sanity check
     model = OpenMetisHybridModel(vocab_size=100, d_model=128, num_layers=2)
     dummy_input = torch.randint(0, 100, (2, 10))
-    logits, workspaces = model(dummy_input)
+    logits, workspaces, traces = model(dummy_input)
     print(f"Logits shape: {logits.shape}")
     print(f"Number of workspaces: {len(workspaces)}")
+    print(f"Number of traces: {len(traces)}")
     print("Model initialized successfully.")

@@ -67,7 +67,7 @@ def train():
             optimizer.zero_grad()
             
             # Forward pass
-            logits, workspaces = model(inputs)
+            logits, workspaces, _ = model(inputs)
             
             # Loss: Language modeling loss + Workspace regularization
             loss = criterion(logits.view(-1, args.vocab_size), targets.view(-1))

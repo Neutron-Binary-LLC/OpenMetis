@@ -97,7 +97,7 @@ class MetisBSModel(nn.Module):
             nn.Linear(d_model, 1)
         )
 
-    def forward(self, x):
+    def forward(self, x, debug: bool = False):
         # x: (batch, 5) -> 5 parameters
         batch_size = x.shape[0]
         # Treat each parameter as a 'token' in a sequence of length 5
@@ -105,11 +105,15 @@ class MetisBSModel(nn.Module):
         h = self.input_projection(x) # (batch, 5, d_model)
         h = h + self.param_encoding
         
+        traces = []
         for layer in self.layers:
-            h, ws = layer(h)
+            h, ws, tr = layer(h, debug=debug)
+            traces.append(tr)
             
         # Predict price from the global representation (mean pool)
         out = self.output_head(h.mean(dim=1)) # (batch, 1)
+        if debug:
+            return out.squeeze(-1), traces
         return out.squeeze(-1)
 
 def train_and_demo():
@@ -137,6 +141,9 @@ def train_and_demo():
     else:
         print("--- No existing model found ---")
 
+    # Load a baseline dataset to get mean/std for scaling even if we don't train
+    base_dataset = BlackScholesDataset(num_samples=1000)
+    
     should_train = args.train or not loaded
     
     if should_train:
@@ -146,6 +153,14 @@ def train_and_demo():
             print(f"--- Starting fresh training for {args.epochs} epochs ---")
             
         dataset = BlackScholesDataset(num_samples=args.samples)
+        # Use baseline scaling for consistency
+        dataset.S_mean, dataset.S_std = base_dataset.S_mean, base_dataset.S_std
+        dataset.K_mean, dataset.K_std = base_dataset.K_mean, base_dataset.K_std
+        dataset.T_mean, dataset.T_std = base_dataset.T_mean, base_dataset.T_std
+        dataset.r_mean, dataset.r_std = base_dataset.r_mean, base_dataset.r_std
+        dataset.sigma_mean, dataset.sigma_std = base_dataset.sigma_mean, base_dataset.sigma_std
+        dataset.prices_mean, dataset.prices_std = base_dataset.prices_mean, base_dataset.prices_std
+        
         train_loader = DataLoader(dataset, batch_size=32, shuffle=True)
         
         optimizer = optim.AdamW(model.parameters(), lr=5e-4, weight_decay=1e-5) # Slightly lower LR
@@ -202,9 +217,21 @@ def train_and_demo():
     
     with torch.no_grad():
         # Rescale prediction
-        predicted_std = dataset.prices_std.to(device)
-        predicted_mean = dataset.prices_mean.to(device)
-        predicted_price = model(test_input) * predicted_std + predicted_mean
+        predicted_std = base_dataset.prices_std.to(device)
+        predicted_mean = base_dataset.prices_mean.to(device)
+        
+        print("\n--- Running Inference with Debug Trace ---")
+        price_out, traces = model(test_input, debug=True)
+        predicted_price = price_out * predicted_std + predicted_mean
+
+        # Analyze traces
+        for l_idx, layer_trace in enumerate(traces):
+            print(f"\nLayer {l_idx} Trace:")
+            for iter_info in layer_trace:
+                weights = iter_info['expert_weights'] # (batch, seq+1, num_experts)
+                # Mean weights across batch and sequence
+                mean_weights = weights.mean(dim=(0, 1))
+                print(f"  Iteration {iter_info['iteration']}: Expert Weights: {mean_weights.tolist()}")
     
     # Calculate exact for comparison
     exact_dataset = BlackScholesDataset(num_samples=1)

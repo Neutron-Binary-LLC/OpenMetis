@@ -25,7 +25,7 @@ def demo_usage():
     print(f"Target iterations: {num_iterations}")
     
     # Forward pass
-    hidden_out, final_workspace_obj = block(x)
+    hidden_out, final_workspace_obj, trace = block(x)
     final_workspace = final_workspace_obj.to_dict()
     
     print("\n--- Forward Pass Results ---")
@@ -72,8 +72,11 @@ def demo_usage():
     # Inference with different depth
     print("\n--- Inference with Dynamic Depth ---")
     dynamic_iters = 8
-    hidden_out_deep, _ = block(x, num_iterations=dynamic_iters)
+    hidden_out_deep, _, trace_deep = block(x, num_iterations=dynamic_iters, debug=True)
     print(f"Successfully ran with {dynamic_iters} iterations.")
+    if trace_deep:
+        print(f"Captured trace for {len(trace_deep)} iterations.")
+        print(f"Expert weights for first iteration: {trace_deep[0]['expert_weights'].mean(dim=(0,1)).tolist()}")
 
 def black_scholes_demo(block: HybridRecurrentMathBlock):
     print("\n--- Black-Scholes Calculation using HybridRecurrentMathBlock ---")
