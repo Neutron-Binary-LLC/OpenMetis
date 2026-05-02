@@ -9,7 +9,7 @@ The architecture features a recurrent loop that carries both a hidden state (neu
 ### Architecture Diagram
 
 ```mermaid
-graph TB
+graph LR
     subgraph Input_Space [Input Layer]
         X[Input x: Batch, Seq, D_model]
         InitWS[Initial Workspace]
@@ -19,81 +19,70 @@ graph TB
     InitWS --> RecurrentLoop
 
     subgraph RecurrentLoop [Recurrent Loop: Iteration 1 to N]
-        direction LR
+        direction TB
         
         subgraph Neural_Core [Neural Processing Unit]
-            direction TB
-            subgraph AttnBlock [Self-Attention Layer]
-                Norm_A[LayerNorm]
-                MHA[Multi-Head Self-Attention]
-                Drop_A[Dropout]
-                Add_A[Residual Add]
+            direction LR
+            subgraph AttnBlock [Self-Attention]
+                Norm_A[LN] --> MHA[MHA] --> Drop_A[DO] --> Add_A[Add]
             end
             
-            subgraph FFNBlock [Feed-Forward & MoE Layer]
-                Norm_F[LayerNorm]
-                Lin1[Linear + GELU]
-                Drop_F1[Dropout]
-                Lin2[Linear]
-                Drop_F2[Dropout]
-                Add_F[Residual Add]
+            subgraph FFNBlock [FFN & MoE Layer]
+                Norm_F[LN] --> Lin1[L+G] --> Drop_F1[DO] --> Lin2[L] --> Drop_F2[DO] --> Add_F[Add]
             end
             
-            Norm_A --> MHA --> Drop_A --> Add_A
             Add_A --> Norm_F
-            Norm_F --> Lin1 --> Drop_F1 --> Lin2 --> Drop_F2 --> Add_F
         end
 
         subgraph Bridge_Workspace [Neuro-Symbolic Core]
-            direction TB
-            subgraph NeuroSymbolic_Bridge [Neuro-Symbolic Bridge]
+            direction LR
+            subgraph NeuroSymbolic_Bridge [NS Bridge]
                 direction TB
-                Proj[Workspace Projector]
-                Aug[Sequence Augmentor: concat]
-                Router[MoE Router: Softmax]
+                Proj[Projector] --> Aug[Augmentor]
+                Router[Router] --> Experts
                 
                 subgraph Experts [Math Experts MoE]
-                    Alg[Algebra Expert: FFN]
-                    Calc[Calculus Expert: FFN]
-                    Num[Numerical Expert: FFN]
-                    Ver[Verification Expert: FFN]
+                    Alg[Alg]
+                    Calc[Calc]
+                    Num[Num]
+                    Ver[Ver]
                 end
                 
                 subgraph Math_Heads [Symbolic Heads]
-                    Deriv[Differentiation Head]
-                    Integ[Integration Head]
-                    Simp[Simplification Head]
-                    Update[Workspace Updater]
+                    Deriv[Deriv]
+                    Integ[Integ]
+                    Simp[Simp]
+                    Update[Update]
                 end
             end
 
             subgraph Workspace_State [Math Workspace]
                 direction TB
-                Latent[Latent State: D_workspace]
-                NumSlots[Numerical Slots: N_slots]
-                Conf[Confidence Score]
-                Iter[Iteration Counter]
+                Latent[Latent]
+                NumSlots[NumSlots]
+                Conf[Conf]
+                Iter[Iter]
             end
         end
 
         %% Connections within loop
         Workspace_State --> Proj
-        Proj -- Latent Embedding --> Aug
+        Proj -- Latent --> Aug
         Add_A --> Aug
         Aug --> FFNBlock
         
         FFNBlock --> Router
         Router --> Experts
-        Experts -- Gated Experts Sum --> Add_F
+        Experts -- Gated Sum --> Add_F
         
         Add_F --> Math_Heads
-        Update -- Delta Latent --> Latent
-        Deriv & Integ & Simp -- Numerical Projections --> NumSlots
-        Update -- Conf Update --> Conf
+        Update -- Delta --> Latent
+        Deriv & Integ & Simp -- Proj --> NumSlots
+        Update -- Update --> Conf
     end
 
     RecurrentLoop --> Output[Final Hidden State]
-    RecurrentLoop --> FinalWS[Final MathWorkspace Object]
+    RecurrentLoop --> FinalWS[Final MathWorkspace]
 
     style RecurrentLoop fill:#2b2b2b,stroke:#555,stroke-width:2px,color:#fff
     style Workspace_State fill:#1e3a5f,stroke:#3a7bd5,color:#fff
