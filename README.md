@@ -84,13 +84,13 @@ graph LR
     RecurrentLoop --> Output[Final Hidden State]
     RecurrentLoop --> FinalWS[Final MathWorkspace]
 
-    style RecurrentLoop fill:#2b2b2b,stroke:#555,stroke-width:2px,color:#fff
-    style Workspace_State fill:#1e3a5f,stroke:#3a7bd5,color:#fff
-    style Neural_Core fill:#3d2b1f,stroke:#d35400,color:#fff
-    style Experts fill:#2d1b33,stroke:#8e44ad,color:#fff
-    style NeuroSymbolic_Bridge fill:#1a2521,stroke:#27ae60,color:#fff
-    style Bridge_Workspace fill:#222,stroke:#444,color:#fff
-    style Input_Space fill:#1e1e1e,stroke:#444,color:#fff
+    style RecurrentLoop fill:#1f1f1f,stroke:#d0d0d0,stroke-width:2px,color:#ffffff
+    style Workspace_State fill:#2a2a2a,stroke:#e0e0e0,stroke-width:2px,color:#ffffff
+    style Neural_Core fill:#262626,stroke:#cfcfcf,stroke-width:2px,color:#ffffff
+    style Experts fill:#303030,stroke:#f0f0f0,stroke-width:2px,color:#ffffff
+    style NeuroSymbolic_Bridge fill:#242424,stroke:#bfbfbf,stroke-width:2px,color:#ffffff
+    style Bridge_Workspace fill:#1a1a1a,stroke:#aaaaaa,stroke-width:2px,color:#ffffff
+    style Input_Space fill:#141414,stroke:#999999,stroke-width:2px,color:#ffffff
 ```
 
 ### Sequence Diagram
