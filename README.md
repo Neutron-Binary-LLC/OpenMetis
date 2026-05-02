@@ -89,6 +89,37 @@ print(f"Final Iteration Count: {final_workspace['iteration_count']}")
 - **Convergence Sensitivity**: Recurrent models can be more sensitive to hyperparameter choices (like learning rate and weight initialization) to maintain stability.
 - **Expert Routing**: The MoE router adds another layer of complexity, potentially leading to expert collapse if not properly regularized.
 
+## Open-Source Math Experts
+
+To enhance the `HybridRecurrentMathBlock`, you can integrate pre-trained mathematical models as specialized experts. Some recommended open-source models and resources include:
+
+- **Qwen2.5-Math**: A state-of-the-art mathematical LLM series (1.5B to 72B) optimized for reasoning and problem-solving. [Hugging Face](https://huggingface.co/Qwen/Qwen2.5-Math-7B).
+- **MathBERT**: A BERT-based model pre-trained on a large corpus of mathematical texts, ideal for extracting features from mathematical expressions. [Hugging Face](https://huggingface.co/tbs17/MathBERT).
+- **Llama-3-Math-70B**: Various community-tuned versions of Llama-3 specifically for competitive mathematics and reasoning.
+- **DeepSeek-Math**: A specialized model for mathematical reasoning that achieves high performance on benchmarks like GSM8K and MATH.
+
+These can be integrated by replacing the default `MathExpert` with a wrapper around these pre-trained models.
+
+## Training and Checkpoints
+
+We provide two scripts for training and experimentation:
+
+1.  `train_sample.py`: A basic template for a training loop.
+2.  `train_advanced.py`: An advanced training script with support for:
+    - **Checkpointing**: Saves and loads weights, optimizer states, and epoch metadata.
+    - **Resuming**: Continue training from a previous checkpoint using the `--resume` flag.
+    - **Inference**: Demonstrates how to load a model for inference after training.
+
+### Usage: Advanced Training
+
+```bash
+# Start a new training session
+python3 train_advanced.py --epochs 10 --lr 1e-4
+
+# Resume training from a checkpoint
+python3 train_advanced.py --epochs 20 --resume --checkpoint math_block_checkpoint.pth
+```
+
 ## Project Structure
 
 - `hybrid_math/`
@@ -97,3 +128,4 @@ print(f"Final Iteration Count: {final_workspace['iteration_count']}")
     - `expression.py`: `MathExpression` and `SymbolicOp` utilities.
 - `demo.py`: Demonstration script showing forward pass and gradient verification.
 - `train_sample.py`: A basic training script template.
+- `train_advanced.py`: Advanced training script with checkpointing and resuming capabilities.
