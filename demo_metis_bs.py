@@ -9,7 +9,7 @@ import argparse
 # Add parent directory to path to import hybrid_math and metis_model
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
 
-from metis_model.model import OpenMythosHybridModel
+from metis_model.model import OpenMetisHybridModel
 from hybrid_math.block import HybridRecurrentMathBlock
 
 class BlackScholesDataset(Dataset):
