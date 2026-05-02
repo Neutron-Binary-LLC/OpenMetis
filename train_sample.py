@@ -43,8 +43,9 @@ def train_sample():
         optimizer.zero_grad()
         
         # Forward pass
-        # The block returns (last_hidden, last_workspace_dict)
-        outputs, workspace = model(inputs)
+        # The block returns (last_hidden, last_workspace_obj)
+        outputs, workspace_obj = model(inputs)
+        workspace = workspace_obj.to_dict()
         
         # Loss calculation
         # 1. Main prediction loss

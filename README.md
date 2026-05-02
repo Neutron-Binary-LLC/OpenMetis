@@ -9,35 +9,108 @@ The architecture features a recurrent loop that carries both a hidden state (neu
 ### Architecture Diagram
 
 ```mermaid
-graph TD
-    Input[Input x: Batch, Seq, D_model] --> Loop
-    subgraph Loop [Recurrent Loop: Iter 1 to N]
-        WS[Math Workspace] -- Injection --> Neural[Neural Proposal: Attention + Norm]
-        Neural -- Proposals --> MoE[Math Experts MoE: Algebra, Calculus, etc.]
-        MoE -- Update --> WS
-        MoE -- Hidden State --> NextIter[Next Iteration]
+graph TB
+    subgraph Input_Space [Input Layer]
+        X[Input x: Batch, Seq, D_model]
+        InitWS[Initial Workspace]
     end
-    Loop --> Output[Final Hidden State + Final Workspace]
+
+    X --> RecurrentLoop
+    InitWS --> RecurrentLoop
+
+    subgraph RecurrentLoop [Recurrent Loop: Iteration 1 to N]
+        direction TB
+        
+        subgraph Neural_Core [Neural Processing Unit]
+            Attn[Multi-Head Self-Attention]
+            Norm1[LayerNorm]
+            FFN[Feed-Forward Network]
+            Norm2[LayerNorm]
+            
+            Attn --> Norm1
+            Norm1 --> FFN
+            FFN --> Norm2
+        end
+
+        subgraph Workspace_State [Math Workspace]
+            Latent[Latent State: D_workspace]
+            NumSlots[Numerical Slots: N_slots]
+            Conf[Confidence Score]
+            Iter[Iteration Counter]
+        end
+
+        subgraph NeuroSymbolic_Bridge [Neuro-Symbolic Bridge]
+            Proj[Workspace Projector]
+            Update[Workspace Updater]
+            Router[MoE Router]
+            
+            subgraph Experts [Math Experts MoE]
+                Alg[Algebra Expert]
+                Calc[Calculus Expert]
+                Num[Numerical Expert]
+                Ver[Verification Expert]
+            end
+            
+            subgraph Math_Heads [Symbolic Heads]
+                Deriv[Differentiation Head]
+                Integ[Integration Head]
+                Simp[Simplification Head]
+            end
+        end
+
+        %% Connections within loop
+        Workspace_State --> Proj
+        Proj -- Latent Injection --> Attn
+        Norm2 --> Router
+        Router --> Experts
+        Experts -- Refined Hidden State --> Norm2
+        
+        Norm2 --> Math_Heads
+        Math_Heads --> Update
+        Update -- Delta Update --> Workspace_State
+        
+        Math_Heads -- Numerical Grad/Values --> NumSlots
+        Update -- Conf Update --> Conf
+    end
+
+    RecurrentLoop --> Output[Final Hidden State]
+    RecurrentLoop --> FinalWS[Final MathWorkspace Object]
+
+    style RecurrentLoop fill:#f9f9f9,stroke:#333,stroke-width:2px
+    style Workspace_State fill:#e1f5fe,stroke:#01579b
+    style Neural_Core fill:#fff3e0,stroke:#e65100
+    style Experts fill:#f3e5f5,stroke:#4a148c
 ```
 
 ### Sequence Diagram
 
 ```mermaid
 sequenceDiagram
-    participant I as Input
-    participant B as HybridRecurrentMathBlock
-    participant W as MathWorkspace
+    autonumber
+    participant I as Input (x)
+    participant B as HybridRecurrentBlock
+    participant P as Workspace Projector
+    participant N as Neural Core (Attn/FFN)
     participant E as MoE Experts
+    participant H as Math Heads
+    participant W as MathWorkspace
 
     I->>B: forward(x, math_state_init)
-    B->>W: Initialize (if empty)
+    B->>W: Initialize State (Latent, NumSlots, Conf)
+    
     loop num_iterations
-        W->>B: Inject Latent State
-        B->>B: Self-Attention (Neural Proposal)
-        B->>E: Route to Experts
-        E->>B: Expert Refinement
-        B->>W: Update Workspace (Symbolic Update)
+        W->>P: Fetch Latent State
+        P->>N: Inject Projected Latent into x
+        N->>N: Self-Attention & FFN Processing
+        N->>E: Route to Domain Experts (Algebra/Calc/etc)
+        E->>N: Return Refined Hidden State
+        N->>H: Propose Symbolic Operations
+        H->>W: Update Numerical Slots (Gradients/Values)
+        H->>W: Update Latent State via Workspace Updater
+        H->>W: Update Confidence Score
+        W->>W: Increment Iteration Count
     end
+    
     B->>I: Return (Output, Final Workspace)
 ```
 
@@ -45,9 +118,14 @@ sequenceDiagram
 
 - **Recurrent Depth**: Shared weights across configurable iterations (default 4-8).
 - **Mathematical Workspace**: Persistent state carrying latent mathematical context, numerical values, and confidence scores.
+    - **Latent State**: High-dimensional vector representing the abstract mathematical context.
+    - **Numerical Slots**: Dedicated slots for storing constants, variables, and their gradients (e.g., for differentiation).
+    - **Confidence Score**: Scalar indicating the model's certainty in its current mathematical state.
+    - **Iteration Counter**: Tracks the number of recurrent steps taken.
 - **MoE Experts**: Specialized layers for different mathematical domains (Algebra, Calculus, etc.).
-- **Differentiable Symbolic Ops**: Support for operations like symbolic-like differentiation using `torch.autograd`.
-- **Stability**: Residual connections and gating mechanisms to ensure gradient flow across depth.
+- **Symbolic Heads**: Dedicated linear layers (`deriv_head`, `integral_head`, `simplify_head`) that propose modifications to the mathematical workspace.
+- **Differentiable Symbolic Ops**: Native support for operations like differentiation, integration approximation, and simplification proposals within the recurrent loop.
+- **Stability**: Residual connections, layer normalization, and LTI-style gating to ensure gradient flow across depth.
 
 ## Installation
 
@@ -68,7 +146,8 @@ block = HybridRecurrentMathBlock(d_model=512, num_iterations=6)
 x = torch.randn(2, 10, 512)
 
 # Forward pass
-output_hidden, final_workspace = block(x)
+output_hidden, workspace_obj = block(x)
+final_workspace = workspace_obj.to_dict()
 
 print(f"Final Iteration Count: {final_workspace['iteration_count']}")
 ```
@@ -127,7 +206,8 @@ The development of the `HybridRecurrentMathBlock` is planned across several phas
 ### Phase 1: Foundation (Current)
 - [x] Recurrent block architecture with latent workspace.
 - [x] Mixture-of-Experts (MoE) routing for domain specialization.
-- [x] Basic differentiable symbolic operations (differentiation).
+- [x] Advanced math-specific heads (Differentiation, Integration, Simplification).
+- [x] Differentiable symbolic operations and numerical slots.
 - [x] Advanced training script with checkpointing and persistence.
 
 ### Phase 2: Enhanced Symbolic Integration

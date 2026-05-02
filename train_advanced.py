@@ -93,7 +93,8 @@ def main():
             x = data[i:i+args.batch_size]
             y = targets[i:i+args.batch_size]
             
-            output, workspace_dict = model(x)
+            output, workspace_obj = model(x)
+            workspace_dict = workspace_obj.to_dict()
             
             # Use MSE loss as a placeholder for learning to transform/reason
             loss = nn.MSELoss()(output, y)

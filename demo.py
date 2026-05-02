@@ -25,7 +25,8 @@ def demo_usage():
     print(f"Target iterations: {num_iterations}")
     
     # Forward pass
-    hidden_out, final_workspace = block(x)
+    hidden_out, final_workspace_obj = block(x)
+    final_workspace = final_workspace_obj.to_dict()
     
     print("\n--- Forward Pass Results ---")
     print(f"Output hidden state shape: {hidden_out.shape}")
