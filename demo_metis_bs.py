@@ -4,6 +4,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 import os
 import sys
+import argparse
 
 # Add parent directory to path to import hybrid_math and metis_model
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
@@ -26,6 +27,13 @@ class BlackScholesDataset(Dataset):
         self.r = torch.rand(num_samples) * 0.09 + 0.01
         self.sigma = torch.rand(num_samples) * 0.4 + 0.1
         
+        # Scaling inputs for better training
+        self.S_mean, self.S_std = 100.0, 20.0
+        self.K_mean, self.K_std = 100.0, 20.0
+        self.T_mean, self.T_std = 1.0, 1.0
+        self.r_mean, self.r_std = 0.05, 0.05
+        self.sigma_mean, self.sigma_std = 0.3, 0.2
+
         self.prices = self._compute_exact_bs()
 
     def _compute_exact_bs(self):
@@ -43,12 +51,14 @@ class BlackScholesDataset(Dataset):
         return self.num_samples
 
     def __getitem__(self, idx):
-        # Concatenate inputs into a sequence-like vector
-        # We'll use 5 tokens/values for S, K, T, r, sigma
         inputs = torch.stack([
-            self.S[idx], self.K[idx], self.T[idx], self.r[idx], self.sigma[idx]
+            (self.S[idx] - self.S_mean) / self.S_std,
+            (self.K[idx] - self.K_mean) / self.K_std,
+            (self.T[idx] - self.T_mean) / self.T_std,
+            (self.r[idx] - self.r_mean) / self.r_std,
+            (self.sigma[idx] - self.sigma_mean) / self.sigma_std
         ])
-        return inputs, self.prices[idx]
+        return inputs, self.prices[idx] / 10.0 # Scale target price
 
 class MetisBSModel(nn.Module):
     """
@@ -86,56 +96,86 @@ class MetisBSModel(nn.Module):
         return out.squeeze(-1)
 
 def train_and_demo():
-    print("--- Preparing Black-Scholes Training ---")
+    parser = argparse.ArgumentParser(description="Metis Black-Scholes Demo")
+    parser.add_argument("--train", action="store_true", help="Force training even if model exists")
+    parser.add_argument("--epochs", type=int, default=100, help="Number of training epochs")
+    parser.add_argument("--samples", type=int, default=2000, help="Number of synthetic samples")
+    args = parser.parse_args()
+
+    checkpoint_path = "metis_bs_model.pth"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    dataset = BlackScholesDataset(num_samples=2000)
-    train_loader = DataLoader(dataset, batch_size=32, shuffle=True)
-    
     model = MetisBSModel(d_model=128, num_layers=2).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=1e-3)
-    criterion = nn.MSELoss()
     
-    print("Starting Training (100 epochs)...")
-    model.train()
-    for epoch in range(100):
-        total_loss = 0
-        for inputs, targets in train_loader:
-            inputs, targets = inputs.to(device), targets.to(device)
-            optimizer.zero_grad()
-            outputs = model(inputs)
-            loss = criterion(outputs, targets)
-            loss.backward()
-            optimizer.step()
-            total_loss += loss.item()
-        
-        if (epoch + 1) % 10 == 0:
-            print(f"Epoch {epoch+1}, Loss: {total_loss/len(train_loader):.6f}")
+    loaded = False
+    if os.path.exists(checkpoint_path):
+        print(f"--- Loading existing model from {checkpoint_path} ---")
+        model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+        loaded = True
+    else:
+        print("--- No existing model found ---")
 
-    # Save model
-    checkpoint_path = "metis_bs_model.pth"
-    torch.save(model.state_dict(), checkpoint_path)
-    print(f"Model saved to {checkpoint_path}")
+    should_train = args.train or not loaded
+    
+    if should_train:
+        if loaded:
+            print(f"--- Continuing training for {args.epochs} epochs ---")
+        else:
+            print(f"--- Starting fresh training for {args.epochs} epochs ---")
+            
+        dataset = BlackScholesDataset(num_samples=args.samples)
+        train_loader = DataLoader(dataset, batch_size=32, shuffle=True)
+        
+        optimizer = optim.Adam(model.parameters(), lr=1e-3)
+        criterion = nn.MSELoss()
+        
+        model.train()
+        for epoch in range(args.epochs):
+            total_loss = 0
+            for inputs, targets in train_loader:
+                inputs, targets = inputs.to(device), targets.to(device)
+                optimizer.zero_grad()
+                outputs = model(inputs)
+                loss = criterion(outputs, targets)
+                loss.backward()
+                optimizer.step()
+                total_loss += loss.item()
+            
+            if (epoch + 1) % 10 == 0 or epoch == 0:
+                print(f"Epoch {epoch+1}/{args.epochs}, Loss: {total_loss/len(train_loader):.6f}")
+
+        # Save model
+        torch.save(model.state_dict(), checkpoint_path)
+        print(f"Model saved to {checkpoint_path}")
+    else:
+        print("Skipping training (use --train to force training).")
 
     print("\n--- Inference Demo (Model Decides on its own) ---")
     model.eval()
     # Sample inputs: S=100, K=105, T=1.0, r=0.05, sigma=0.2
-    test_input = torch.tensor([[100.0, 105.0, 1.0, 0.05, 0.2]], device=device)
+    # Normalize inputs as done in dataset
+    S_val, K_val, T_val, r_val, sigma_val = 100.0, 105.0, 1.0, 0.05, 0.2
+    test_input = torch.tensor([[
+        (S_val - 100.0) / 20.0,
+        (K_val - 100.0) / 20.0,
+        (T_val - 1.0) / 1.0,
+        (r_val - 0.05) / 0.05,
+        (sigma_val - 0.3) / 0.2
+    ]], device=device)
     
-    # Target value (calculated in previous demo): ~8.02
     with torch.no_grad():
-        predicted_price = model(test_input)
+        predicted_price = model(test_input) * 10.0 # Rescale output
     
     # Calculate exact for comparison
     exact_dataset = BlackScholesDataset(num_samples=1)
-    exact_dataset.S[0] = 100.0
-    exact_dataset.K[0] = 105.0
-    exact_dataset.T[0] = 1.0
-    exact_dataset.r[0] = 0.05
-    exact_dataset.sigma[0] = 0.2
+    exact_dataset.S[0] = S_val
+    exact_dataset.K[0] = K_val
+    exact_dataset.T[0] = T_val
+    exact_dataset.r[0] = r_val
+    exact_dataset.sigma[0] = sigma_val
     exact_price = exact_dataset._compute_exact_bs()[0]
 
-    print(f"Inputs: S=100, K=105, T=1.0, r=0.05, sigma=0.2")
+    print(f"Inputs: S={S_val}, K={K_val}, T={T_val}, r={r_val}, sigma={sigma_val}")
     print(f"Model Predicted Price: {predicted_price.item():.4f}")
     print(f"Exact Black-Scholes Price: {exact_price.item():.4f}")
     print(f"Difference: {abs(predicted_price.item() - exact_price.item()):.4f}")
