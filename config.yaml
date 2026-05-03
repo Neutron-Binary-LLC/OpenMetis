@@ -1,0 +1,21 @@
+training:
+  epochs: 10
+  batch_size: 16
+  lr: 2.0e-4
+  weight_decay: 0.01
+  grad_clip: 1.0
+  checkpoint_path: "openmetis_large.pth"
+  save_every: 2
+  eval_every: 1
+
+model:
+  variant: "small"  # tiny, small, medium, large
+  num_layers: 4
+  vocab_size: 5000
+  max_seq_len: 128
+  dropout: 0.1
+
+dataset:
+  num_samples: 5000
+  seq_len: 64
+  type: "synthetic_math" # synthetic_math, gsm8k_mock
