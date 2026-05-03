@@ -41,8 +41,8 @@ graph LR
     Coda --> Hidden
     Loop --> FinalWS
 
-    style Recurrent_Stack fill:#1a1a1a,stroke:#aaaaaa,stroke-width:2px,color:#ffffff
-    style Input_Space fill:#141414,stroke:#999999,stroke-width:2px,color:#ffffff
+%%    style Recurrent_Stack fill:#1a1a1a,stroke:#aaaaaa,stroke-width:2px,color:#ffffff
+%%    style Input_Space fill:#141414,stroke:#999999,stroke-width:2px,color:#ffffff
 ```
 
 #### 2. Recurrent Loop Detail
@@ -68,8 +68,8 @@ graph TD
         Heads -->|Update| WS
     end
 
-    style Iteration fill:#1a1a1a,stroke:#aaaaaa,stroke-width:2px,color:#ffffff
-    style WS fill:#2a2a2a,stroke:#e0e0e0,stroke-width:2px,color:#ffffff
+%%    style Iteration fill:#1a1a1a,stroke:#aaaaaa,stroke-width:2px,color:#ffffff
+%%    style WS fill:#2a2a2a,stroke:#e0e0e0,stroke-width:2px,color:#ffffff
 ```
 
 ##### A. Neural Processing Unit (NPU)
@@ -135,8 +135,8 @@ graph LR
         Math_Heads -->|Confidence Update| Conf
     end
 
-    style Workspace_State fill:#2a2a2a,stroke:#e0e0e0,stroke-width:2px,color:#ffffff
-    style Math_Heads fill:#303030,stroke:#f0f0f0,stroke-width:2px,color:#ffffff
+%%    style Workspace_State fill:#2a2a2a,stroke:#e0e0e0,stroke-width:2px,color:#ffffff
+%%    style Math_Heads fill:#303030,stroke:#f0f0f0,stroke-width:2px,color:#ffffff
 ```
 
 ### Sequence Diagram
