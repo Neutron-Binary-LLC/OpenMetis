@@ -78,7 +78,7 @@ Handles standard transformer-style hidden state transformation.
 ```mermaid
 graph LR
     subgraph Neural_Core [Neural Processing Unit]
-        direction TB
+        direction LR
         subgraph AttnBlock [Self-Attention]
             direction LR
             Norm_A[LN] --> MHA[MHA] --> Drop_A[DO] --> Add_A[Add]
