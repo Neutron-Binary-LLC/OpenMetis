@@ -260,7 +260,7 @@ class NeuroSymbolicReasoningCell(nn.Module):
         # MoE Experts
         self.experts = nn.ModuleList([
             MathExpert(self.d_model, expert_type=t) 
-            for t in ["algebra", "calculus", "numerical", "verification"][:config.n_experts]
+            for t in ["algebra", "calculus", "numerical", "verification", "trig", "exp_log", "geometry", "logic"][:config.n_experts]
         ])
         self.router = MoERouter(self.d_model, config.n_experts)
         

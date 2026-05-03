@@ -17,16 +17,27 @@ class OpenMetisHybridModel(nn.Module):
     ):
         super().__init__()
         if config is None:
-            config = MathConfig(
-                vocab_size=kwargs.get("vocab_size", 1000),
-                dim=kwargs.get("d_model", 512),
-                n_heads=kwargs.get("num_heads", 8),
-                max_loop_iters=kwargs.get("num_iterations", 4),
-                workspace_dim=kwargs.get("workspace_dim", 256),
-                n_experts=kwargs.get("num_experts", 4),
-                dropout=kwargs.get("dropout", 0.1),
-                device=str(kwargs.get("device", "cpu"))
-            )
+            # Check if variant is provided in kwargs
+            variant_name = kwargs.get("variant", None)
+            if variant_name:
+                from nn.variants import VARIANTS
+                config = VARIANTS.get(variant_name, VARIANTS["small"])
+                # Update config with any explicit overrides
+                config.vocab_size = kwargs.get("vocab_size", config.vocab_size)
+                config.dim = kwargs.get("d_model", config.dim)
+                config.max_seq_len = kwargs.get("max_seq_len", config.max_seq_len)
+                config.device = str(kwargs.get("device", config.device))
+            else:
+                config = MathConfig(
+                    vocab_size=kwargs.get("vocab_size", 1000),
+                    dim=kwargs.get("d_model", 512),
+                    n_heads=kwargs.get("num_heads", 8),
+                    max_loop_iters=kwargs.get("num_iterations", 4),
+                    workspace_dim=kwargs.get("workspace_dim", 256),
+                    n_experts=kwargs.get("num_experts", 4),
+                    dropout=kwargs.get("dropout", 0.1),
+                    device=str(kwargs.get("device", "cpu"))
+                )
         
         self.config = config
         self.d_model = config.dim
