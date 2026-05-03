@@ -8,64 +8,83 @@ The architecture features a recurrent loop that carries both a hidden state (neu
 
 ### Architecture Diagram
 
+The architecture is divided into the high-level macro-flow and the detailed internal recurrent processing.
+
+#### 1. Macro-Flow
+Overview of the data flow from input embeddings through the recurrent stack to the final output.
+
 ```mermaid
 graph LR
-
-    %% ================= INPUT =================
     subgraph Input_Space [Input Layer]
         direction TB
         X[Input x<br/>Batch, Seq, D_model]
         InitWS[Initial Workspace]
     end
 
+    subgraph Recurrent_Stack [Recurrent Processing]
+        direction TB
+        Prelude[Prelude Layers]
+        Loop["Recurrent Loop<br/>(N Iterations)"]
+        Coda[Coda Layers]
+        
+        Prelude --> Loop --> Coda
+    end
+
+    subgraph Output_Space [Output Layer]
+        direction TB
+        Hidden[Final Hidden State]
+        FinalWS[Final Workspace]
+    end
+
+    X --> Prelude
+    InitWS --> Loop
+    Coda --> Hidden
+    Loop --> FinalWS
+
+    style Recurrent_Stack fill:#1a1a1a,stroke:#aaaaaa,stroke-width:2px,color:#ffffff
+    style Input_Space fill:#141414,stroke:#999999,stroke-width:2px,color:#ffffff
+```
+
+#### 2. Recurrent Loop Detail
+Internal view of a single iteration within the `NeuroSymbolicReasoningCell`.
+
+```mermaid
+graph LR
     %% ================= LOOP =================
-    subgraph RecurrentLoop [Recurrent Loop: Iteration 1 → N]
+    subgraph RecurrentLoop [Internal Iteration]
         direction LR
 
         %% ---- Neural Path ----
         subgraph Neural_Core [Neural Processing Unit]
             direction TB
-
-            %% Attention Block
             subgraph AttnBlock [Self-Attention]
                 direction LR
                 Norm_A[LN] --> MHA[MHA] --> Drop_A[DO] --> Add_A[Add]
             end
-
-            %% FFN Block
             subgraph FFNBlock [FFN / MoE]
                 direction LR
                 Norm_F[LN] --> Lin1[L+G] --> Drop_F1[DO] --> Lin2[L] --> Drop_F2[DO] --> Add_F[Add]
             end
-
             Add_A --> Norm_F
         end
 
         %% ---- Bridge ----
         subgraph Bridge_Workspace [Neuro-Symbolic Core]
             direction LR
-
-            %% Bridge
             subgraph NeuroSymbolic_Bridge [NS Bridge]
                 direction TB
                 Proj[Projector]
                 Aug[Augmentor]
                 Router[Router]
             end
-
-            %% Experts
             subgraph Experts [Math Experts MoE]
                 direction LR
                 Alg[Alg] --- Calc[Calc] --- Num[Num] --- Ver[Ver]
             end
-
-            %% Symbolic Heads
             subgraph Math_Heads [Symbolic Heads]
                 direction LR
                 Deriv[Deriv] --- Integ[Integ] --- Simp[Simp] --- Trig[Trig] --- ExpLog[ExpLog] --- Pow[Pow] --- Update[Update]
             end
-
-            %% Workspace State
             subgraph Workspace_State [Math Workspace]
                 direction TB
                 Latent[Latent]
@@ -76,11 +95,6 @@ graph LR
         end
 
         %% ================= FLOW =================
-
-        %% Inputs into loop
-        X --> Norm_A
-        InitWS --> Latent
-
         %% Neural → Bridge
         Add_A --> Aug
         Latent --> Proj --> Aug
@@ -102,22 +116,10 @@ graph LR
         ExpLog -->|Proj| NumSlots
         Pow -->|Proj| NumSlots
         Update -->|Update| Conf
-
     end
 
-    %% ================= OUTPUT =================
-    RecurrentLoop --> Output[Final Hidden State]
-    RecurrentLoop --> FinalWS[Final Workspace]
-
-    %% ================= STYLING =================
-%%    style RecurrentLoop fill:#1f1f1f,stroke:#d0d0d0,stroke-width:2px,color:#ffffff
     style Workspace_State fill:#2a2a2a,stroke:#e0e0e0,stroke-width:2px,color:#ffffff
-%%    style Neural_Core fill:#262626,stroke:#cfcfcf,stroke-width:2px,color:#ffffff
     style Experts fill:#303030,stroke:#f0f0f0,stroke-width:2px,color:#ffffff
-%%    style Math_Heads fill:#1a1a1a,stroke:#f0f0f0,stroke-width:2px,color:#ffffff
-%%    style NeuroSymbolic_Bridge fill:#242424,stroke:#bfbfbf,stroke-width:2px,color:#ffffff
-%%    style Bridge_Workspace fill:#1a1a1a,stroke:#aaaaaa,stroke-width:2px,color:#ffffff
-    style Input_Space fill:#141414,stroke:#999999,stroke-width:2px,color:#ffffff
 ```
 
 ### Sequence Diagram
