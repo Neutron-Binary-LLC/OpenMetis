@@ -6,11 +6,11 @@ import os
 import sys
 import argparse
 
-# Add parent directory to path to import hybrid_math and metis_model
+# Add parent directory to path to import nn and metis_model
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
 
 from metis_model.model import OpenMetisHybridModel
-from hybrid_math.block import HybridRecurrentMathBlock
+from nn.block import NeuroSymbolicReasoningCell
 
 class BlackScholesDataset(Dataset):
     """
@@ -84,7 +84,7 @@ class MetisBSModel(nn.Module):
         # We use a small version of the hybrid model
         # Instead of token IDs, we will pass projected embeddings directly to the layers
         self.layers = nn.ModuleList([
-            HybridRecurrentMathBlock(d_model=d_model, num_iterations=12) 
+            NeuroSymbolicReasoningCell(d_model=d_model, num_iterations=12)
             for _ in range(num_layers)
         ])
         
@@ -247,7 +247,7 @@ def train_and_demo():
     print(f"Exact Black-Scholes Price: {exact_price.item():.4f}")
     print(f"Difference: {abs(predicted_price.item() - exact_price.item()):.4f}")
     
-    print("\nSuccess: The model processed the inputs through its HybridRecurrentMathBlocks")
+    print("\nSuccess: The model processed the inputs through its NeuroSymbolicReasoningCells")
     print("without any explicit calls to math functions during the inference call.")
 
 if __name__ == "__main__":

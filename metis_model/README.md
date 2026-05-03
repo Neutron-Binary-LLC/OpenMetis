@@ -1,6 +1,6 @@
 # OpenMetis Hybrid Architecture
 
-OpenMetis is a deep neuro-symbolic model built upon the `HybridRecurrentMathBlock`. It stacks multiple recurrent layers, each maintaining its own mathematical workspace, to solve complex, multi-step symbolic reasoning tasks.
+OpenMetis is a deep neuro-symbolic model built upon the `NeuroSymbolicReasoningCell`. It stacks multiple recurrent layers, each maintaining its own mathematical workspace, to solve complex, multi-step symbolic reasoning tasks.
 
 ## Architecture Overview
 

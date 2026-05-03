@@ -7,11 +7,11 @@ import argparse
 from typing import List, Tuple
 import sys
 
-# Add parent directory to path to import hybrid_math
+# Add parent directory to path to import nn
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from metis_model.model import OpenMetisHybridModel
-from hybrid_math.workspace import MathWorkspace
+from nn.workspace import MathWorkspace
 
 class MathDataset(Dataset):
     """

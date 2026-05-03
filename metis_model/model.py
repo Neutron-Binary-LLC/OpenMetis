@@ -1,12 +1,12 @@
 import torch
 import torch.nn as nn
 from typing import Tuple, Optional, List, Dict, Any
-from hybrid_math.block import HybridRecurrentMathBlock, MathConfig
-from hybrid_math.workspace import MathWorkspace
+from nn.block import NeuroSymbolicReasoningCell, MathConfig
+from nn.workspace import MathWorkspace
 
 class OpenMetisHybridModel(nn.Module):
     """
-    OpenMetis-style model that stacks multiple HybridRecurrentMathBlocks
+    OpenMetis-style model that stacks multiple NeuroSymbolicReasoningCells
     to enable deep hierarchical mathematical reasoning.
     """
     def __init__(
@@ -37,9 +37,9 @@ class OpenMetisHybridModel(nn.Module):
         self.embedding = nn.Embedding(config.vocab_size, self.d_model)
         self.pos_encoding = nn.Parameter(torch.randn(1, config.max_seq_len, self.d_model))
         
-        # Stack of HybridRecurrentMathBlocks
+        # Stack of NeuroSymbolicReasoningCells
         self.layers = nn.ModuleList([
-            HybridRecurrentMathBlock(config=config) for _ in range(num_layers)
+            NeuroSymbolicReasoningCell(config=config) for _ in range(num_layers)
         ])
         
         # Output head

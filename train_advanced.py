@@ -4,7 +4,7 @@ import torch.optim as optim
 import os
 import argparse
 from typing import Dict, Any
-from hybrid_math.block import HybridRecurrentMathBlock
+from nn.block import NeuroSymbolicReasoningCell
 
 def save_checkpoint(model: nn.Module, optimizer: optim.Optimizer, epoch: int, loss: float, path: str):
     """
@@ -37,7 +37,7 @@ def load_checkpoint(path: str, device: torch.device):
     return checkpoint
 
 def main():
-    parser = argparse.ArgumentParser(description="Advanced training script for HybridRecurrentMathBlock")
+    parser = argparse.ArgumentParser(description="Advanced training script for NeuroSymbolicReasoningCell")
     parser.add_argument("--epochs", type=int, default=10, help="Number of training epochs")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
     parser.add_argument("--batch_size", type=int, default=4, help="Batch size")
@@ -55,7 +55,7 @@ def main():
     num_iterations = 4
     num_experts = 4
 
-    model = HybridRecurrentMathBlock(
+    model = NeuroSymbolicReasoningCell(
         d_model=d_model, 
         workspace_dim=workspace_dim, 
         num_iterations=num_iterations,

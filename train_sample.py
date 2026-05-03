@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from hybrid_math.block import HybridRecurrentMathBlock
+from nn.block import NeuroSymbolicReasoningCell
 
 def train_sample():
     # Hyperparameters
@@ -17,7 +17,7 @@ def train_sample():
     print(f"Using device: {device}")
     
     # Model
-    model = HybridRecurrentMathBlock(
+    model = NeuroSymbolicReasoningCell(
         d_model=d_model, 
         num_heads=4, 
         num_iterations=num_iterations,

@@ -1,13 +1,13 @@
 import torch
 import torch.nn as nn
-from hybrid_math.block import HybridRecurrentMathBlock
-from hybrid_math.expression import MathExpression, SymbolicOp
+from nn.block import NeuroSymbolicReasoningCell
+from nn.expression import MathExpression, SymbolicOp
 
 def demo_usage():
-    print("--- Initializing HybridRecurrentMathBlock ---")
+    print("--- Initializing NeuroSymbolicReasoningCell ---")
     d_model = 256
     num_iterations = 4
-    block = HybridRecurrentMathBlock(
+    block = NeuroSymbolicReasoningCell(
         d_model=d_model, 
         num_heads=4, 
         num_iterations=num_iterations, 
@@ -78,8 +78,8 @@ def demo_usage():
         print(f"Captured trace for {len(trace_deep)} iterations.")
         print(f"Expert weights for first iteration: {trace_deep[0]['expert_weights'].mean(dim=(0,1)).tolist()}")
 
-def black_scholes_demo(block: HybridRecurrentMathBlock):
-    print("\n--- Black-Scholes Calculation using HybridRecurrentMathBlock ---")
+def black_scholes_demo(block: NeuroSymbolicReasoningCell):
+    print("\n--- Black-Scholes Calculation using NeuroSymbolicReasoningCell ---")
     
     # Parameters: S (Spot), K (Strike), T (Time to maturity), r (Risk-free rate), sigma (Volatility)
     S = torch.tensor([100.0], requires_grad=True)
@@ -123,5 +123,5 @@ if __name__ == "__main__":
     
     # Initialize block for Black-Scholes demo
     d_model = 256
-    block = HybridRecurrentMathBlock(d_model=d_model)
+    block = NeuroSymbolicReasoningCell(d_model=d_model)
     black_scholes_demo(block)

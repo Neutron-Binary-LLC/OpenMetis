@@ -1,6 +1,6 @@
 # Hybrid Neuro-Symbolic Recurrent Block
 
-This project implements a `HybridRecurrentMathBlock` in PyTorch, designed for advanced mathematical reasoning by combining neural transformer-style processing with a persistent, differentiable mathematical workspace.
+This project implements a `NeuroSymbolicReasoningCell` in PyTorch, designed for advanced mathematical reasoning by combining neural transformer-style processing with a persistent, differentiable mathematical workspace.
 
 ## Core Architecture
 
@@ -175,10 +175,10 @@ pip install torch
 
 ```python
 import torch
-from hybrid_math.block import HybridRecurrentMathBlock
+from nn.block import NeuroSymbolicReasoningCell
 
 # Initialize the block
-block = HybridRecurrentMathBlock(d_model=512, num_iterations=6)
+block = NeuroSymbolicReasoningCell(d_model=512, num_iterations=6)
 
 # Input tensor (Batch, Seq, Dim)
 x = torch.randn(2, 10, 512)
@@ -208,7 +208,7 @@ print(f"Final Iteration Count: {final_workspace['iteration_count']}")
 
 ## Open-Source Math Experts
 
-To enhance the `HybridRecurrentMathBlock`, you can integrate pre-trained mathematical models as specialized experts. Some recommended open-source models and resources include:
+To enhance the `NeuroSymbolicReasoningCell`, you can integrate pre-trained mathematical models as specialized experts. Some recommended open-source models and resources include:
 
 - **Qwen2.5-Math**: A state-of-the-art mathematical LLM series (1.5B to 72B) optimized for reasoning and problem-solving. [Hugging Face](https://huggingface.co/Qwen/Qwen2.5-Math-7B).
 - **MathBERT**: A BERT-based model pre-trained on a large corpus of mathematical texts, ideal for extracting features from mathematical expressions. [Hugging Face](https://huggingface.co/tbs17/MathBERT).
@@ -243,7 +243,7 @@ The `demo_metis_bs.py` script demonstrates a higher-level application: training 
 
 ### Key Features:
 - **Neuro-Symbolic Dataset**: Generates synthetic Black-Scholes data (S, K, T, r, sigma) and exact prices.
-- **Autonomous Inference**: Once trained, the model predicts prices by processing inputs through its `HybridRecurrentMathBlocks` without calling explicit math functions.
+- **Autonomous Inference**: Once trained, the model predicts prices by processing inputs through its `NeuroSymbolicReasoningCells` without calling explicit math functions.
 - **Checkpoint Persistence**: Automatically saves and loads `metis_bs_model.pth`.
 - **Continuous Training**: Supports loading an existing model and performing additional training epochs.
 
@@ -262,7 +262,7 @@ python3 demo_metis_bs.py --train --epochs 50 --samples 5000
 
 ## Roadmap
 
-The development of the `HybridRecurrentMathBlock` is planned across several phases to evolve from a latent-state recycler to a full-fledged neuro-symbolic engine.
+The development of the `NeuroSymbolicReasoningCell` is planned across several phases to evolve from a latent-state recycler to a full-fledged neuro-symbolic engine.
 
 ### Phase 1: Foundation (Current)
 - [x] Recurrent block architecture with latent workspace.
@@ -285,13 +285,13 @@ The development of the `HybridRecurrentMathBlock` is planned across several phas
 
 ### Phase 4: Scaling & Deployment
 - [ ] **Flash-Recurrence**: Optimize the recurrent loop for faster inference and reduced memory footprint during training.
-- [ ] **Multi-Block Stacking**: Research on stacking multiple `HybridRecurrentMathBlocks` with hierarchical workspaces.
+- [ ] **Multi-Block Stacking**: Research on stacking multiple `NeuroSymbolicReasoningCells` with hierarchical workspaces.
 - [ ] **Interpretable Reasoning Traces**: Tools to visualize and export the symbolic "scratchpad" evolution in human-readable LaTeX.
 
 ## Project Structure
 
 - `hybrid_math/`
-    - `block.py`: Main `HybridRecurrentMathBlock` implementation.
+    - `block.py`: Main `NeuroSymbolicReasoningCell` implementation.
     - `workspace.py`: `MathWorkspace` class managing state.
     - `expression.py`: `MathExpression` and `SymbolicOp` utilities.
 - `metis_model/`

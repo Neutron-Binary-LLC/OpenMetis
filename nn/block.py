@@ -11,7 +11,7 @@ from .workspace import MathWorkspace
 @dataclass
 class MathConfig:
     """
-    Hyperparameter configuration for HybridRecurrentMathBlock.
+    Hyperparameter configuration for NeuroSymbolicReasoningCell.
     """
     # Core
     vocab_size: int = 32000
@@ -202,7 +202,7 @@ def apply_rotary_emb(
     """
     return x * cos + _rotate_half(x) * sin
 
-class HybridRecurrentMathBlock(nn.Module):
+class NeuroSymbolicReasoningCell(nn.Module):
     """
     A Hybrid Neuro-Symbolic Recurrent Block that combines neural processing
     with a persistent mathematical workspace.
