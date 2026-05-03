@@ -279,6 +279,50 @@ python3 demo_metis_bs.py --train
 python3 demo_metis_bs.py --train --epochs 50 --samples 5000
 ```
 
+## Large-Scale Training and Configuration
+
+The `metis_model/train_metis.py` script has been enhanced to support large-scale training using a YAML-based configuration system.
+
+### Key Enhancements:
+- **YAML Configuration**: Externalized all hyperparameters (training, model, dataset) into `config.yaml`.
+- **Model Variants**: Support for predefined variants (`tiny`, `small`, `medium`, `large`) with easy overrides.
+- **Enhanced Dataset**: `SyntheticMathDataset` for simulating structured mathematical sequences.
+- **Improved Training Loop**:
+    - **Cosine Annealing LR**: For smoother convergence.
+    - **Gradient Clipping**: To maintain stability in recurrent loops.
+    - **Workspace Regularization**: Encourages stability in latent state transitions.
+    - **Checkpointing**: Saves both periodic and "best" models based on loss.
+
+### Usage:
+
+```bash
+# Train using the default config.yaml
+python3 metis_model/train_metis.py
+
+# Specify a custom config and device
+python3 metis_model/train_metis.py --config my_large_config.yaml --device cuda
+```
+
+### Configuration Example (`config.yaml`):
+
+```yaml
+training:
+  epochs: 10
+  batch_size: 16
+  lr: 2.0e-4
+  grad_clip: 1.0
+  checkpoint_path: "openmetis_large.pth"
+
+model:
+  variant: "small"
+  num_layers: 4
+  vocab_size: 5000
+
+dataset:
+  num_samples: 5000
+  seq_len: 64
+```
+
 ## Roadmap
 
 The development of the `NeuroSymbolicReasoningCell` is planned across several phases to evolve from a latent-state recycler to a full-fledged neuro-symbolic engine.
