@@ -46,80 +46,97 @@ graph LR
 ```
 
 #### 2. Recurrent Loop Detail
-Internal view of a single iteration within the `NeuroSymbolicReasoningCell`.
+Internal view of the processing within the `NeuroSymbolicReasoningCell`, divided into functional stages.
+
+##### Master Diagram: Functional Stages
+High-level interaction between the neural core, symbolic bridge, and mathematical workspace within a single iteration.
+
+```mermaid
+graph TD
+    subgraph Iteration ["Single Recurrent Iteration"]
+        direction TB
+        
+        NPU[Neural Processing Unit<br/>Attention & MoE FFN]
+        Bridge[Neuro-Symbolic Bridge<br/>Projector & Expert Router]
+        Heads[Symbolic Heads<br/>Math-Specific Updates]
+        WS[(Math Workspace<br/>Latent & Numerical)]
+
+        WS -.->|Project| Bridge
+        Bridge -->|Inject| NPU
+        NPU -->|Refine| Bridge
+        Bridge -->|Route| Heads
+        Heads -->|Update| WS
+    end
+
+    style Iteration fill:#1a1a1a,stroke:#aaaaaa,stroke-width:2px,color:#ffffff
+    style WS fill:#2a2a2a,stroke:#e0e0e0,stroke-width:2px,color:#ffffff
+```
+
+##### A. Neural Processing Unit (NPU)
+Handles standard transformer-style hidden state transformation.
 
 ```mermaid
 graph LR
-    %% ================= LOOP =================
-    subgraph RecurrentLoop [Internal Iteration]
-        direction LR
-
-        %% ---- Neural Path ----
-        subgraph Neural_Core [Neural Processing Unit]
-            direction TB
-            subgraph AttnBlock [Self-Attention]
-                direction LR
-                Norm_A[LN] --> MHA[MHA] --> Drop_A[DO] --> Add_A[Add]
-            end
-            subgraph FFNBlock [FFN / MoE]
-                direction LR
-                Norm_F[LN] --> Lin1[L+G] --> Drop_F1[DO] --> Lin2[L] --> Drop_F2[DO] --> Add_F[Add]
-            end
-            Add_A --> Norm_F
-        end
-
-        %% ---- Bridge ----
-        subgraph Bridge_Workspace [Neuro-Symbolic Core]
+    subgraph Neural_Core [Neural Processing Unit]
+        direction TB
+        subgraph AttnBlock [Self-Attention]
             direction LR
-            subgraph NeuroSymbolic_Bridge [NS Bridge]
-                direction TB
-                Proj[Projector]
-                Aug[Augmentor]
-                Router[Router]
-            end
-            subgraph Experts [Math Experts MoE]
-                direction LR
-                Alg[Alg] --- Calc[Calc] --- Num[Num] --- Ver[Ver]
-            end
-            subgraph Math_Heads [Symbolic Heads]
-                direction LR
-                Deriv[Deriv] --- Integ[Integ] --- Simp[Simp] --- Trig[Trig] --- ExpLog[ExpLog] --- Pow[Pow] --- Update[Update]
-            end
-            subgraph Workspace_State [Math Workspace]
-                direction TB
-                Latent[Latent]
-                NumSlots[NumSlots]
-                Conf[Confidence]
-                Iter[Iteration]
-            end
+            Norm_A[LN] --> MHA[MHA] --> Drop_A[DO] --> Add_A[Add]
+        end
+        subgraph FFNBlock [FFN / MoE]
+            direction LR
+            Norm_F[LN] --> Lin1[L+G] --> Drop_F1[DO] --> Lin2[L] --> Drop_F2[DO] --> Add_F[Add]
+        end
+        Add_A --> Norm_F
+    end
+```
+
+##### B. Neuro-Symbolic Bridge & Experts
+Integrates the symbolic workspace into the neural flow and routes to specialized math experts.
+
+```mermaid
+graph LR
+    subgraph Bridge_Workspace [Neuro-Symbolic Core]
+        direction LR
+        subgraph NeuroSymbolic_Bridge [NS Bridge]
+            direction TB
+            Proj[Projector]
+            Aug[Augmentor]
+            Router[Router]
+        end
+        subgraph Experts [Math Experts MoE]
+            direction LR
+            Alg[Alg] --- Calc[Calc] --- Num[Num] --- Ver[Ver]
+        end
+        
+        Latent[Latent State] --> Proj --> Aug
+        Aug --> Router --> Experts
+    end
+```
+
+##### C. Symbolic Heads & Workspace Updates
+Processes the refined hidden state to propose and apply updates to the persistent mathematical state.
+
+```mermaid
+graph LR
+    subgraph Workspace_Update_Flow [Symbolic Update Cycle]
+        direction TB
+        subgraph Math_Heads [Symbolic Heads]
+            direction LR
+            Deriv[Deriv] --- Integ[Integ] --- Simp[Simp] --- Trig[Trig] --- ExpLog[ExpLog] --- Pow[Pow] --- Update[Update]
+        end
+        subgraph Workspace_State [Math Workspace]
+            direction LR
+            Latent[Latent] --- NumSlots[NumSlots] --- Conf[Confidence] --- Iter[Iteration]
         end
 
-        %% ================= FLOW =================
-        %% Neural → Bridge
-        Add_A --> Aug
-        Latent --> Proj --> Aug
-
-        %% Bridge → FFN
-        Aug --> Norm_F
-
-        %% FFN → Experts
-        Add_F --> Router --> Experts
-        Experts -->|Gated Sum| Add_F
-
-        %% Symbolic updates
-        Add_F --> Math_Heads
-        Update -->|Delta| Latent
-        Deriv -->|Proj| NumSlots
-        Integ -->|Proj| NumSlots
-        Simp -->|Proj| NumSlots
-        Trig -->|Proj| NumSlots
-        ExpLog -->|Proj| NumSlots
-        Pow -->|Proj| NumSlots
-        Update -->|Update| Conf
+        Math_Heads -->|State Delta| Latent
+        Math_Heads -->|Numerical Proj| NumSlots
+        Math_Heads -->|Confidence Update| Conf
     end
 
     style Workspace_State fill:#2a2a2a,stroke:#e0e0e0,stroke-width:2px,color:#ffffff
-    style Experts fill:#303030,stroke:#f0f0f0,stroke-width:2px,color:#ffffff
+    style Math_Heads fill:#303030,stroke:#f0f0f0,stroke-width:2px,color:#ffffff
 ```
 
 ### Sequence Diagram
