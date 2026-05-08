@@ -259,9 +259,14 @@ class NeuroSymbolicReasoningCell(nn.Module):
             'derivative': nn.Linear(self.d_model, self.d_model),
             'integral': nn.Linear(self.d_model, self.d_model),
             'simplify': nn.Linear(self.d_model, self.d_model),
-            'trig': nn.Linear(self.d_model, self.d_model),
-            'exp_log': nn.Linear(self.d_model, self.d_model),
+            'sin': nn.Linear(self.d_model, self.d_model),
+            'cos': nn.Linear(self.d_model, self.d_model),
+            'tan': nn.Linear(self.d_model, self.d_model),
+            'exp': nn.Linear(self.d_model, self.d_model),
+            'log': nn.Linear(self.d_model, self.d_model),
             'power': nn.Linear(self.d_model, self.d_model),
+            'sqrt': nn.Linear(self.d_model, self.d_model),
+            'erf': nn.Linear(self.d_model, self.d_model),
         })
 
         self.lora_a = nn.Parameter(torch.randn(config.max_loop_iters, self.d_model, config.lora_rank))
@@ -282,9 +287,24 @@ class NeuroSymbolicReasoningCell(nn.Module):
         delta_latent = self.workspace_updater(combined)
 
         # Optional: Apply concrete operations to numerical slots
-        if workspace.numerical_values.requires_grad:
+        # Note: financial symbolic update disabled as per request
+        if False and workspace.numerical_values.requires_grad:
             # Example: numerical differentiation / integration on selected slots
-            pass
+            vars_tensor = workspace.numerical_values[:, :5]
+            if vars_tensor.requires_grad:
+                # Black-Scholes call pricing formula incorporated directly into the gradient flow
+                bs_price = self.apply_financial(
+                    vars_tensor[:, 0], vars_tensor[:, 1], vars_tensor[:, 2], vars_tensor[:, 3], vars_tensor[:, 4]
+                )
+                grad = torch.autograd.grad(
+                    bs_price.sum(), vars_tensor, create_graph=True, allow_unused=True
+                )[0]
+                if grad is not None:
+                    # Update numerical slots with sensitivities (Greeks)
+                    # Delta (dC/dS) is grad[:, 0], Vega (dC/dSigma) is grad[:, 4]
+                    workspace.numerical_values[:, 5:10] = grad
+                    # Store price in slot 10
+                    workspace.numerical_values[:, 10] = bs_price
 
         # Generate readable expression (for interpretability)
         delta_expr = [f"step{step}_update" for _ in range(len(global_feat))]
@@ -352,3 +372,48 @@ class NeuroSymbolicReasoningCell(nn.Module):
             h = layer(h)
 
         return h, workspace, trace
+
+    def apply_sin(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.sin(x)
+
+    def apply_cos(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.cos(x)
+
+    def apply_tan(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.tan(x)
+
+    def apply_exp(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.exp(x)
+
+    def apply_log(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.log(torch.abs(x) + 1e-8)
+
+    def apply_power(self, x: torch.Tensor, exponent: float = 2.0) -> torch.Tensor:
+        if exponent == 0.5:
+            return self.apply_sqrt(x)
+        return torch.pow(x, exponent)
+
+    def apply_sqrt(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.sqrt(torch.abs(x) + 1e-8)
+
+    def apply_erf(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.erf(x)
+
+    def apply_financial(self, s: torch.Tensor, k: torch.Tensor, t: torch.Tensor, r: torch.Tensor, sigma: torch.Tensor) -> torch.Tensor:
+        """Foundational Black-Scholes formula for option pricing."""
+        # Ensure positive values for log and sqrt
+        s = torch.clamp(s, min=1e-3)
+        k = torch.clamp(k, min=1e-3)
+        t = torch.clamp(t, min=1e-3)
+        sigma = torch.clamp(sigma, min=1e-3)
+        
+        # d1 = [ln(S/K) + (r + sigma^2/2)T] / (sigma * sqrt(T))
+        d1 = (self.apply_log(s / k) + (r + 0.5 * self.apply_power(sigma, 2.0)) * t) / (sigma * self.apply_sqrt(t))
+        d2 = d1 - sigma * self.apply_sqrt(t)
+        
+        def norm_cdf(x):
+            return 0.5 * (1.0 + self.apply_erf(x / 1.41421356))
+            
+        # Price = S*N(d1) - K*e^(-rT)*N(d2)
+        prices = s * norm_cdf(d1) - k * self.apply_exp(-r * t) * norm_cdf(d2)
+        return prices

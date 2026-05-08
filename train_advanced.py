@@ -38,7 +38,7 @@ def load_checkpoint(path: str, device: torch.device):
 
 def main():
     parser = argparse.ArgumentParser(description="Advanced training script for NeuroSymbolicReasoningCell")
-    parser.add_argument("--epochs", type=int, default=10, help="Number of training epochs")
+    parser.add_argument("--epochs", type=int, default=100, help="Number of training epochs")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
     parser.add_argument("--batch_size", type=int, default=4, help="Batch size")
     parser.add_argument("--seq_len", type=int, default=16, help="Sequence length")

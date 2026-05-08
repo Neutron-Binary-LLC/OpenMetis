@@ -39,6 +39,16 @@ class SyntheticMathDataset(Dataset):
         return self.data[idx], self.targets[idx]
 
 def load_config(config_path: str) -> Dict[str, Any]:
+    if not os.path.isabs(config_path):
+        # Try to find it relative to the project root (parent of metis_model)
+        root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        potential_path = os.path.join(root_dir, config_path)
+        if os.path.exists(potential_path):
+            config_path = potential_path
+            
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"Configuration file not found: {config_path}")
+        
     with open(config_path, 'r') as f:
         return yaml.safe_load(f)
 
