@@ -202,250 +202,153 @@ def apply_rotary_emb(
     """
     return x * cos + _rotate_half(x) * sin
 
+
 class NeuroSymbolicReasoningCell(nn.Module):
-    """
-    A Hybrid Neuro-Symbolic Recurrent Block that combines neural processing
-    with a persistent mathematical workspace.
-    Supports advanced operations including differentiation, integration, and simplification.
-    """
-    def __init__(self, config: Optional[MathConfig] = None, **kwargs):
+    def __init__(self, config: MathConfig):
         super().__init__()
-        if config is None:
-            # Fallback for backward compatibility or direct param injection
-            config = MathConfig(
-                dim=kwargs.get("d_model", 512),
-                n_heads=kwargs.get("num_heads", 8),
-                max_loop_iters=kwargs.get("num_iterations", 6),
-                workspace_dim=kwargs.get("workspace_dim", 256),
-                n_experts=kwargs.get("num_experts", 4),
-                dropout=kwargs.get("dropout", 0.1),
-                device=str(kwargs.get("device", "cpu"))
-            )
-        
         self.config = config
         self.d_model = config.dim
-        self.num_iterations = config.max_loop_iters
         self.workspace_dim = config.workspace_dim
-        self.device = torch.device(config.device)
-        
-        # Neural components
-        self.self_attn = nn.MultiheadAttention(self.d_model, config.n_heads, dropout=config.dropout, batch_first=True)
-        self.norm1 = nn.LayerNorm(self.d_model)
-        self.norm2 = nn.LayerNorm(self.d_model)
-        
-        # Prelude layers
-        self.prelude = nn.ModuleList([
-            nn.TransformerEncoderLayer(d_model=self.d_model, nhead=config.n_heads, dim_feedforward=self.d_model*4, dropout=config.dropout, batch_first=True)
-            for _ in range(config.prelude_layers)
-        ])
-        
-        # Coda layers
-        self.coda = nn.ModuleList([
-            nn.TransformerEncoderLayer(d_model=self.d_model, nhead=config.n_heads, dim_feedforward=self.d_model*4, dropout=config.dropout, batch_first=True)
-            for _ in range(config.coda_layers)
-        ])
-        
-        self.ffn = nn.Sequential(
-            nn.Linear(self.d_model, self.d_model * 4),
-            nn.GELU(),
-            nn.Dropout(config.dropout),
-            nn.Linear(self.d_model * 4, self.d_model),
-            nn.Dropout(config.dropout)
+
+        # === Core Components ===
+        self.norm1 = RMSNorm(self.d_model)  # Use the good RMSNorm you wrote
+        self.norm2 = RMSNorm(self.d_model)
+
+        # Use your RotaryEmbedding
+        self.rope = RotaryEmbedding(dim=config.qk_rope_head_dim, base=config.rope_theta)
+
+        # Attention - simplified for now (can upgrade to MLA later)
+        self.self_attn = nn.MultiheadAttention(
+            embed_dim=self.d_model,
+            num_heads=config.n_heads,
+            dropout=config.dropout,
+            batch_first=True
         )
-        
-        # Workspace interaction
+
+        # Prelude / Coda
+        self.prelude = nn.ModuleList([
+            nn.TransformerEncoderLayer(
+                d_model=self.d_model, nhead=config.n_heads,
+                dim_feedforward=self.d_model * 4, dropout=config.dropout,
+                batch_first=True, norm_first=True
+            ) for _ in range(config.prelude_layers)
+        ])
+
+        self.coda = nn.ModuleList([
+            nn.TransformerEncoderLayer(
+                d_model=self.d_model, nhead=config.n_heads,
+                dim_feedforward=self.d_model * 4, dropout=config.dropout,
+                batch_first=True, norm_first=True
+            ) for _ in range(config.coda_layers)
+        ])
+
+        # Workspace fusion
+        self.workspace_cross_attn = nn.MultiheadAttention(
+            embed_dim=self.d_model, num_heads=8, dropout=config.dropout, batch_first=True
+        )
         self.workspace_projector = nn.Linear(self.workspace_dim, self.d_model)
         self.workspace_updater = nn.Linear(self.d_model, self.workspace_dim)
-        
-        # MoE Experts
-        self.experts = nn.ModuleList([
-            MathExpert(self.d_model, expert_type=t) 
-            for t in ["algebra", "calculus", "numerical", "verification", "trig", "exp_log", "geometry", "logic"][:config.n_experts]
-        ])
-        self.router = MoERouter(self.d_model, config.n_experts)
-        
-        # Math-specific heads for proposing operations
-        self.deriv_head = nn.Linear(self.d_model, self.d_model)
-        self.integral_head = nn.Linear(self.d_model, self.d_model)
-        self.simplify_head = nn.Linear(self.d_model, self.d_model)
-        
-        # New foundational math heads
-        self.trig_head = nn.Linear(self.d_model, self.d_model)      # sin, cos, tan
-        self.exp_log_head = nn.Linear(self.d_model, self.d_model)   # exp, log
-        self.pow_head = nn.Linear(self.d_model, self.d_model)       # power, sqrt
-        
-        # Stability mechanism (LTI-style transformation)
-        self.stability_gate = nn.Parameter(torch.ones(1) * 0.9)
-        self.dropout_layer = nn.Dropout(config.dropout)
-        
-        # LoRA adapters for depth adaptation (simplified version)
+
+        # MoE (kept simple for now)
+        self.experts = nn.ModuleList([MathExpert(self.d_model, t)
+                                      for t in ["algebra", "calculus", "trig", "logic", "verification"]])
+        self.router = MoERouter(self.d_model, len(self.experts))
+
+        # Typed math proposal heads
+        self.operation_heads = nn.ModuleDict({
+            'derivative': nn.Linear(self.d_model, self.d_model),
+            'integral': nn.Linear(self.d_model, self.d_model),
+            'simplify': nn.Linear(self.d_model, self.d_model),
+            'trig': nn.Linear(self.d_model, self.d_model),
+            'exp_log': nn.Linear(self.d_model, self.d_model),
+            'power': nn.Linear(self.d_model, self.d_model),
+        })
+
         self.lora_a = nn.Parameter(torch.randn(config.max_loop_iters, self.d_model, config.lora_rank))
         self.lora_b = nn.Parameter(torch.zeros(config.max_loop_iters, config.lora_rank, self.d_model))
-        
-        self.to(self.device)
 
+        self.dropout = nn.Dropout(config.dropout)
 
-    def forward(
-        self, 
-        x: torch.Tensor, 
-        math_state_init: Optional[MathWorkspace] = None,
-        num_iterations: Optional[int] = None,
-        debug: bool = False
-    ) -> Tuple[torch.Tensor, MathWorkspace, Optional[List[Dict[str, Any]]]]:
-        """
-        x: (batch, seq_len, d_model)
-        num_iterations: Override default iterations at inference time.
-        """
+    def _propose_symbolic_update(self, h: torch.Tensor, workspace: MathWorkspace, step: int):
+        """Typed, structured symbolic proposal."""
+        global_feat = h.mean(dim=1)  # (B, D)
+
+        proposals = {name: head(global_feat) for name, head in self.operation_heads.items()}
+
+        # Combine with learned gating
+        gate = torch.sigmoid(torch.stack(list(proposals.values()), dim=1))  # (B, num_ops, D)
+        combined = torch.sum(gate * torch.stack(list(proposals.values()), dim=1), dim=1)
+
+        delta_latent = self.workspace_updater(combined)
+
+        # Optional: Apply concrete operations to numerical slots
+        if workspace.numerical_values.requires_grad:
+            # Example: numerical differentiation / integration on selected slots
+            pass
+
+        # Generate readable expression (for interpretability)
+        delta_expr = [f"step{step}_update" for _ in range(len(global_feat))]
+
+        return delta_latent, delta_expr
+
+    def forward(self, x: torch.Tensor, workspace: Optional[MathWorkspace] = None,
+                num_iterations: Optional[int] = None, debug: bool = False):
+
         batch_size, seq_len, _ = x.shape
-        iters = num_iterations if num_iterations is not None else self.num_iterations
-        
+        iters = num_iterations or self.config.max_loop_iters
         trace = [] if debug else None
 
-        # 0. Prelude (Standard Transformer layers)
+        # Prelude
         for layer in self.prelude:
             x = layer(x)
 
-        # Initialize workspace if not provided
-        workspace = math_state_init if math_state_init is not None else \
-                    MathWorkspace(batch_size, self.workspace_dim, x.device)
-        
-        h = x # Current hidden state
-        
+        if workspace is None:
+            workspace = MathWorkspace.new(batch_size, self.workspace_dim, x.device)
+
+        h = x
+
         for i in range(iters):
             residual = h
-            
-            # 1. Neural Proposal (Self-Attention)
+
+            # 1. Self-Attention with LoRA
             h_norm = self.norm1(h)
             attn_out, _ = self.self_attn(h_norm, h_norm, h_norm)
-            
-            # LoRA depth adaptation
+
+            # Depth-specific LoRA
             if i < self.config.max_loop_iters:
                 lora_update = (h_norm @ self.lora_a[i]) @ self.lora_b[i]
                 attn_out = attn_out + lora_update
 
-            h = self.norm1(h + self.dropout_layer(attn_out))
-            
-            # 2. Workspace Injection
-            # Project workspace latent state into the hidden dimension
-            ws_feat = self.workspace_projector(workspace.latent_state).unsqueeze(1) # (batch, 1, d_model)
-            # Inject workspace into sequence (concatenation or addition)
-            # Here we concatenate to allow the model to attend to it specifically
-            h_augmented = torch.cat([h, ws_feat], dim=1) 
-            
-            # 3. MoE Expert Processing
-            h_ffn = self.ffn(h_augmented)
-            
-            # Route based on the augmented state
-            exp_weights, exp_logits = self.router(h_ffn) # (batch, seq_len+1, num_experts)
-            
-            expert_outputs = torch.stack([expert(h_ffn, debug=debug) for expert in self.experts], dim=-1) # (B, S+1, D, E)
-            combined_expert_out = torch.sum(expert_outputs * exp_weights.unsqueeze(2), dim=-1)
-            
-            if debug:
-                iter_trace = {
-                    "iteration": i,
-                    "expert_weights": exp_weights.detach().cpu(),
-                    "expert_logits": exp_logits.detach().cpu(),
-                    "input_mean": h_ffn.mean().item(),
-                    "input_std": h_ffn.std().item()
-                }
-                trace.append(iter_trace)
+            h = residual + self.dropout(attn_out)
+            h = self.norm1(h)  # Clean pre-norm style
 
-            # Residual connection and stabilization
-            # Trim back to original sequence length for the main hidden state
-            h = self.norm2(residual + self.dropout_layer(combined_expert_out[:, :seq_len, :]))
-            
-            # 4. Symbolic Update (Propose changes to workspace)
-            delta_ws = self._perform_math_operations(h, workspace)
-            
-            # Update workspace
-            workspace.update(delta_ws)
-            
-            # ACT (Adaptive Computation Time) halting
-            if self.config.act_threshold < 1.0:
-                # Simplified ACT: if confidence is high enough across batch, we could stop
-                # For simplicity in this demo, we just track it
-                if torch.all(workspace.confidence > self.config.act_threshold):
-                    break
+            # 2. Workspace Cross-Attention (much cleaner!)
+            ws_token = self.workspace_projector(workspace.latent_state).unsqueeze(1)  # (B, 1, D)
+            h_aug, _ = self.workspace_cross_attn(
+                query=h, key=ws_token, value=ws_token
+            )
+            h = h + self.dropout(h_aug)
 
-        # 5. Coda (Standard Transformer layers)
+            # 3. MoE FFN
+            h_ffn = self.norm2(h)
+            weights, _ = self.router(h_ffn)
+            expert_outs = torch.stack([e(h_ffn) for e in self.experts], dim=-1)
+            moe_out = torch.sum(expert_outs * weights.unsqueeze(2), dim=-1)
+
+            h = h + self.dropout(moe_out)
+
+            # 4. Symbolic Workspace Update
+            delta_latent, delta_expr = self._propose_symbolic_update(h, workspace, i)
+            workspace.update(delta_latent, delta_expr)
+
+            # ACT Halting
+            if torch.all(workspace.confidence > self.config.act_threshold):
+                if debug:
+                    print(f"Early stopping at iteration {i}")
+                break
+
+        # Coda
         for layer in self.coda:
             h = layer(h)
-            
+
         return h, workspace, trace
-
-    def _perform_math_operations(self, h: torch.Tensor, workspace: MathWorkspace) -> torch.Tensor:
-        """Core neuro-symbolic math engine."""
-        # Mean pool for global decision
-        global_feat = h.mean(dim=1)  # (B, D)
-
-        # Propose operations
-        deriv_feat = self.deriv_head(global_feat)
-        integ_feat = self.integral_head(global_feat)
-        simp_feat = self.simplify_head(global_feat)
-        trig_feat = self.trig_head(global_feat)
-        explog_feat = self.exp_log_head(global_feat)
-        pow_feat = self.pow_head(global_feat)
-
-        # Combine proposals
-        math_update = deriv_feat + integ_feat + simp_feat + trig_feat + explog_feat + pow_feat
-
-        # Differentiable operations via autograd
-        if workspace.numerical_values.requires_grad:
-            vars_tensor = workspace.numerical_values[:, :5]
-            if vars_tensor.requires_grad:
-                dummy_loss = vars_tensor.sum()
-                grad = torch.autograd.grad(
-                    dummy_loss, vars_tensor, create_graph=True, allow_unused=True
-                )[0]
-                if grad is not None:
-                    workspace.numerical_values[:, 5:10] = grad
-
-        # Simple symbolic-style integration approximation
-        integral_approx = torch.tanh(integ_feat) * 0.1
-
-        delta_latent = self.workspace_updater(math_update + integral_approx)
-
-        # Update confidence based on "consistency" (magnitude of update)
-        new_conf = torch.sigmoid(torch.mean(torch.abs(delta_latent), dim=1, keepdim=True))
-        workspace.confidence = new_conf
-
-        # Update numerical slots
-        workspace.numerical_values[:, 10:12] = deriv_feat.mean(dim=1, keepdim=True)
-
-        return delta_latent
-
-    def compute_derivative(self, f_values: torch.Tensor, x_values: torch.Tensor) -> torch.Tensor:
-        """Differentiable numerical differentiation."""
-        dx = x_values[:, 1:] - x_values[:, :-1]
-        df = f_values[:, 1:] - f_values[:, :-1]
-        return df / (dx + 1e-8)
-
-    def symbolic_integration_approx(self, expr_latent: torch.Tensor) -> torch.Tensor:
-        """Approximate integration in latent space."""
-        return torch.cumsum(expr_latent, dim=1) * 0.05
-
-    def apply_trigonometric(self, x: torch.Tensor, func_type: str = "sin") -> torch.Tensor:
-        """Apply foundational trigonometric functions."""
-        if func_type == "sin":
-            return torch.sin(x)
-        elif func_type == "cos":
-            return torch.cos(x)
-        elif func_type == "tan":
-            return torch.tan(x)
-        return x
-
-    def apply_exponential_log(self, x: torch.Tensor, func_type: str = "exp") -> torch.Tensor:
-        """Apply exponential or logarithmic functions."""
-        if func_type == "exp":
-            return torch.exp(x)
-        elif func_type == "log":
-            # Add epsilon for numerical stability
-            return torch.log(torch.abs(x) + 1e-8)
-        return x
-
-    def apply_power(self, x: torch.Tensor, exponent: float = 2.0) -> torch.Tensor:
-        """Apply power functions."""
-        if exponent == 0.5:
-            return torch.sqrt(torch.abs(x) + 1e-8)
-        return torch.pow(x, exponent)

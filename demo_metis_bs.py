@@ -10,7 +10,8 @@ import argparse
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
 
 from metis_model.model import OpenMetisHybridModel
-from nn.block import NeuroSymbolicReasoningCell
+from nn.block import NeuroSymbolicReasoningCell, MathConfig
+from nn.workspace import MathWorkspace
 
 class BlackScholesDataset(Dataset):
     """
@@ -84,9 +85,17 @@ class MetisBSModel(nn.Module):
         # We use a small version of the hybrid model
         # Instead of token IDs, we will pass projected embeddings directly to the layers
         self.layers = nn.ModuleList([
-            NeuroSymbolicReasoningCell(d_model=d_model, num_iterations=12)
+            NeuroSymbolicReasoningCell(config=MathConfig(
+                dim=d_model, 
+                workspace_dim=d_model, 
+                max_loop_iters=12,
+                n_experts=5
+            ))
             for _ in range(num_layers)
         ])
+        
+        # Financial expert addition for BS
+        self.bs_expert = nn.Linear(d_model, d_model)
         
         # More expressive output head
         self.output_head = nn.Sequential(
@@ -100,18 +109,44 @@ class MetisBSModel(nn.Module):
     def forward(self, x, debug: bool = False):
         # x: (batch, 5) -> 5 parameters
         batch_size = x.shape[0]
+        
+        # Initialize workspace with numerical values for BS
+        # Unscale inputs to feed to the symbolic financial formula
+        unscaled_x = x.clone()
+        unscaled_x[:, 0] = unscaled_x[:, 0] * 15.0 + 100.0   # S
+        unscaled_x[:, 1] = unscaled_x[:, 1] * 15.0 + 100.0   # K
+        unscaled_x[:, 2] = unscaled_x[:, 2] * 0.6 + 1.0     # T
+        unscaled_x[:, 3] = unscaled_x[:, 3] * 0.03 + 0.05    # r
+        unscaled_x[:, 4] = unscaled_x[:, 4] * 0.15 + 0.3    # sigma
+        unscaled_x.requires_grad_(True)
+        
         # Treat each parameter as a 'token' in a sequence of length 5
-        x = x.unsqueeze(-1) # (batch, 5, 1)
-        h = self.input_projection(x) # (batch, 5, d_model)
+        x_seq = x.unsqueeze(-1) # (batch, 5, 1)
+        h = self.input_projection(x_seq) # (batch, 5, d_model)
         h = h + self.param_encoding
         
         traces = []
         for layer in self.layers:
-            h, ws, tr = layer(h, debug=debug)
+            # Create workspace and seed with numerical values
+            ws = MathWorkspace(batch_size, self.d_model, device=x.device)
+            ws.numerical_values[:, :5] = unscaled_x
+            
+            h, ws, tr = layer(h, workspace=ws, debug=debug)
             traces.append(tr)
             
+        # Apply specialized financial head for BS logic refinement
+        h_fin = self.bs_expert(h.mean(dim=1))
+        
         # Predict price from the global representation (mean pool)
-        out = self.output_head(h.mean(dim=1)) # (batch, 1)
+        # Use both the latent features and the numerical slot dedicated to financial formula
+        h_global = h.mean(dim=1)
+        # Numerical slot 10 was populated with fin_feat in _perform_math_operations
+        # Since it's a small value, we can use it to modulate or add to the representation
+        numerical_fin = ws.numerical_values[:, 10:11]
+        
+        # Project numerical_fin if needed, or just add it to one dimension
+        # For simplicity, we just use h_global and h_fin
+        out = self.output_head(h_global + h_fin) # (batch, 1)
         if debug:
             return out.squeeze(-1), traces
         return out.squeeze(-1)

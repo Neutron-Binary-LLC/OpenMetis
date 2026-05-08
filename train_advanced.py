@@ -4,7 +4,7 @@ import torch.optim as optim
 import os
 import argparse
 from typing import Dict, Any
-from nn.block import NeuroSymbolicReasoningCell
+from nn.block import NeuroSymbolicReasoningCell, MathConfig
 
 def save_checkpoint(model: nn.Module, optimizer: optim.Optimizer, epoch: int, loss: float, path: str):
     """
@@ -16,9 +16,9 @@ def save_checkpoint(model: nn.Module, optimizer: optim.Optimizer, epoch: int, lo
         'optimizer_state_dict': optimizer.state_dict(),
         'loss': loss,
         'config': {
-            'd_model': model.d_model,
-            'num_iterations': model.num_iterations,
-            'workspace_dim': model.workspace_dim,
+            'd_model': model.config.dim,
+            'num_iterations': model.config.max_loop_iters,
+            'workspace_dim': model.config.workspace_dim,
             'num_experts': len(model.experts)
         }
     }
@@ -53,14 +53,17 @@ def main():
     d_model = 256
     workspace_dim = 128
     num_iterations = 4
-    num_experts = 4
+    num_experts = 5 # Needs to be 5 because MathExpert list in NeuroSymbolicReasoningCell is hardcoded with 5 types
 
-    model = NeuroSymbolicReasoningCell(
-        d_model=d_model, 
-        workspace_dim=workspace_dim, 
-        num_iterations=num_iterations,
-        num_experts=num_experts
-    ).to(device)
+    config = MathConfig(
+        dim=d_model,
+        workspace_dim=workspace_dim,
+        max_loop_iters=num_iterations,
+        n_experts=num_experts,
+        device=str(device)
+    )
+
+    model = NeuroSymbolicReasoningCell(config=config).to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     start_epoch = 0
@@ -93,7 +96,7 @@ def main():
             x = data[i:i+args.batch_size]
             y = targets[i:i+args.batch_size]
             
-            output, workspace_obj = model(x)
+            output, workspace_obj, trace = model(x)
             workspace_dict = workspace_obj.to_dict()
             
             # Use MSE loss as a placeholder for learning to transform/reason
@@ -121,7 +124,7 @@ def main():
     
     with torch.no_grad():
         test_input = torch.randn(1, args.seq_len, d_model).to(device)
-        test_output, _ = model(test_input)
+        test_output, _, _ = model(test_input)
         print(f"Inference output shape: {test_output.shape}")
 
 if __name__ == "__main__":

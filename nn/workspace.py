@@ -29,14 +29,37 @@ class MathWorkspace:
         self.iteration_count = 0
         self.confidence = torch.ones(batch_size, 1, device=device)
 
+        self.symbolic_expr: List[str]  # Human-readable expressions (for debugging / verification)
+
         # Store history of expressions (for debugging / backtracking)
         self.expression_history: List[str] = [""] * batch_size
+
+        self.step_history: List[Dict]  # Optional trace
+
+    @classmethod
+    def new(cls, batch_size: int, workspace_dim: int, device: torch.device, num_slots: int = 16):
+        ws = cls(
+            batch_size=batch_size,
+            workspace_dim=workspace_dim,
+            device=device,
+            num_num_slots=num_slots
+        )
+        ws.symbolic_expr = ["0"] * batch_size
+        ws.confidence = torch.zeros(batch_size, 1, device=device)
+        ws.step_history = []
+        return ws
 
     def update(self, delta_latent: torch.Tensor, new_confidence: Optional[torch.Tensor] = None):
         self.latent_state = self.latent_state + delta_latent
         if new_confidence is not None:
             self.confidence = new_confidence
         self.iteration_count += 1
+
+    def update(self, delta_latent: torch.Tensor, delta_expr: Optional[List[str]] = None):
+        self.latent_state = self.latent_state + delta_latent
+        if delta_expr is not None:
+            self.symbolic_expr = delta_expr
+        self.confidence = torch.sigmoid(self.latent_state.norm(dim=-1, keepdim=True) * 0.1)
 
     def to_dict(self) -> Dict[str, Any]:
         return {

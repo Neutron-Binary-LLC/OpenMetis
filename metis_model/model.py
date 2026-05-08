@@ -78,7 +78,7 @@ class OpenMetisHybridModel(nn.Module):
         
         for i, layer in enumerate(self.layers):
             ws_init = workspaces[i] if workspaces is not None else None
-            x, ws, tr = layer(x, math_state_init=ws_init, num_iterations=num_iterations, debug=debug)
+            x, ws, tr = layer(x, workspace=ws_init, num_iterations=num_iterations, debug=debug)
             new_workspaces.append(ws)
             traces.append(tr)
             
