@@ -1,48 +1,44 @@
-# Hybrid Neuro-Symbolic Recurrent Block
+# OpenMetis: Agentic Neuro-Symbolic Workspace
 
-This project implements a `NeuroSymbolicReasoningCell` in PyTorch, designed for advanced mathematical reasoning by combining neural transformer-style processing with a persistent, differentiable mathematical workspace.
+OpenMetis is a state-of-the-art framework for neural-symbolic integration, designed for advanced mathematical reasoning and financial engineering. It combines neural transformer-style processing with a persistent, differentiable mathematical workspace and deterministic tool augmentation.
 
 ## Core Architecture
 
-The architecture features a recurrent loop that carries both a hidden state (neural) and a mathematical workspace (symbolic/latent) across multiple iterations.
+OpenMetis features a hierarchical architecture where multiple `NeuroSymbolicReasoningCell` layers are stacked to enable deep, multi-stage reasoning. Each layer maintains its own mathematical workspace and can delegate complex computations to specialized tools.
 
 ### Architecture Diagram
 
-The architecture is divided into the high-level macro-flow and the detailed internal recurrent processing.
+The architecture is divided into the high-level macro-flow (stacked layers) and the detailed internal recurrent processing within each cell.
 
-#### 1. Macro-Flow
-Overview of the data flow from input embeddings through the recurrent stack to the final output.
+#### 1. Macro-Flow (Stacked Hybrid Model)
+Overview of the data flow through multiple stacked reasoning layers, interacting with the mathematical tools and the world environment.
 
 ```mermaid
-graph LR
-    subgraph Input_Space [Input Layer]
-        direction TB
-        X[Input x<br/>Batch, Seq, D_model]
-        InitWS[Initial Workspace]
+graph TD
+    subgraph World_Env [Financial World]
+        Data[Market Data / Tasks]
     end
 
-    subgraph Recurrent_Stack [Recurrent Processing]
+    subgraph Stack [OpenMetis Hybrid Stack]
         direction TB
-        Prelude[Prelude Layers]
-        Loop["Recurrent Loop<br/>(N Iterations)"]
-        Coda[Coda Layers]
+        L1[Layer 1: Reasoning Cell]
+        L2[Layer 2: Reasoning Cell]
+        LN[Layer N: Reasoning Cell]
         
-        Prelude --> Loop --> Coda
+        L1 --> L2 --> LN
     end
 
-    subgraph Output_Space [Output Layer]
-        direction TB
-        Hidden[Final Hidden State]
-        FinalWS[Final Workspace]
+    subgraph Tools [Deterministic Tools]
+        FMT[FinMathTools]
+        Sym[Symbolic Engine]
     end
 
-    X --> Prelude
-    InitWS --> Loop
-    Coda --> Hidden
-    Loop --> FinalWS
+    Data --> L1
+    Stack <--> Tools
+    LN --> Output[Refined Result / Trace]
 
-%%    style Recurrent_Stack fill:#1a1a1a,stroke:#aaaaaa,stroke-width:2px,color:#ffffff
-%%    style Input_Space fill:#141414,stroke:#999999,stroke-width:2px,color:#ffffff
+%%    style Stack fill:#1a1a1a,stroke:#aaaaaa,stroke-width:2px,color:#ffffff
+%%    style Tools fill:#141414,stroke:#999999,stroke-width:2px,color:#ffffff
 ```
 
 #### 2. Recurrent Loop Detail
@@ -173,21 +169,35 @@ sequenceDiagram
 
 ## Key Features
 
-- **Recurrent Depth**: Shared weights across configurable iterations (default 4-8).
+- **Hierarchical Stacking**: Stack multiple hybrid layers (`OpenMetisHybridModel`) for deep reasoning.
+- **Tool-Augmented Reasoning (Orchestrator)**: The `NeuroSymbolicReasoningCell` acts as an orchestrator, delegating complex calculations to `FinMathTools`.
 - **Mathematical Workspace**: Persistent state carrying latent mathematical context, numerical values, and confidence scores.
     - **Latent State**: High-dimensional vector representing the abstract mathematical context.
-    - **Numerical Slots**: Dedicated slots for storing constants, variables, and their gradients (e.g., for differentiation).
-    - **Confidence Score**: Scalar indicating the model's certainty in its current mathematical state.
-    - **Iteration Counter**: Tracks the number of recurrent steps taken.
+    - **Numerical Slots**: 16 dedicated slots for storing constants, variables, and their gradients.
+    - **Audit Trail**: Full history of tool calls and workspace updates (`step_history`).
+- **Recurrent Depth**: Shared weights across configurable iterations (default 4-8) per layer.
 - **MoE Experts**: Specialized layers for different mathematical domains (Algebra, Calculus, etc.).
-- **Symbolic Heads**: Dedicated linear layers (`deriv_head`, `integral_head`, `simplify_head`, `trig_head`, `exp_log_head`, `pow_head`) that propose modifications to the mathematical workspace.
-- **Differentiable Symbolic Ops**: Native support for operations like differentiation, integration approximation, trigonometric functions, exponentials, and power laws within the recurrent loop.
-- **Stability**: Residual connections, layer normalization, and LTI-style gating to ensure gradient flow across depth.
+- **Differentiable Symbolic Ops**: Native support for differentiation, integration approximation, and elementary functions.
+
+## Financial Mathematics World
+
+OpenMetis is integrated with a specialized `world` package for financial mathematics:
+- **FinancialWorld**: High-level environment for generating market data and evaluating tasks.
+- **DataSources**: Synthetic generation of option pricing data (S, K, T, r, sigma).
+- **Task Library**: Built-in tasks for Option Pricing, Greeks calculation, and Implied Volatility (IV) estimation.
+
+## Agentic Workspace
+
+This repository follows an **Agentic Workspace** workflow (see [AGENTS.md](AGENTS.md)). Specialized AI agents collaborate on the development:
+- **ContextIngestor**: Maps neural-symbolic patterns.
+- **CodeGenerator**: Implements neural blocks and math logic.
+- **MathAgent**: Ensures numerical stability and correctness.
+- **VisualizationAgent**: Provides insights into latent states and tool usage.
 
 ## Installation
 
 ```bash
-pip install torch
+pip install torch matplotlib pyyaml
 ```
 
 ## Usage
@@ -225,142 +235,67 @@ print(f"Final Iteration Count: {final_workspace['iteration_count']}")
 - **Convergence Sensitivity**: Recurrent models can be more sensitive to hyperparameter choices (like learning rate and weight initialization) to maintain stability.
 - **Expert Routing**: The MoE router adds another layer of complexity, potentially leading to expert collapse if not properly regularized.
 
-## Open-Source Math Experts
+## Demos
 
-To enhance the `NeuroSymbolicReasoningCell`, you can integrate pre-trained mathematical models as specialized experts. Some recommended open-source models and resources include:
+We provide several demos to showcase the framework's capabilities:
 
-- **Qwen2.5-Math**: A state-of-the-art mathematical LLM series (1.5B to 72B) optimized for reasoning and problem-solving. [Hugging Face](https://huggingface.co/Qwen/Qwen2.5-Math-7B).
-- **MathBERT**: A BERT-based model pre-trained on a large corpus of mathematical texts, ideal for extracting features from mathematical expressions. [Hugging Face](https://huggingface.co/tbs17/MathBERT).
-- **Llama-3-Math-70B**: Various community-tuned versions of Llama-3 specifically for competitive mathematics and reasoning.
-- **DeepSeek-Math**: A specialized model for mathematical reasoning that achieves high performance on benchmarks like GSM8K and MATH.
+1.  **Orchestrator Demo**: `demo_orchestrator.py` - Shows tool-augmented reasoning for Black-Scholes pricing and Greeks calculation with a full audit trail.
+2.  **Visualization Demo**: `visualize_orchestrator.py` - Generates `orchestrator_trace.png` showing the consistency of tool-based reasoning.
+3.  **Metis Black-Scholes Demo**: `demo_metis_bs.py` - Demonstrates autonomous model training for option pricing.
 
-These can be integrated by replacing the default `MathExpert` with a wrapper around these pre-trained models.
+### Running the Orchestrator Demo
+
+```bash
+python3 demo_orchestrator.py
+```
 
 ## Training and Checkpoints
 
-We provide two scripts for training and experimentation:
+We provide scripts for large-scale training using a YAML-based configuration system:
 
-1.  `train_sample.py`: A basic template for a training loop.
-2.  `train_advanced.py`: An advanced training script with support for:
-    - **Checkpointing**: Saves and loads weights, optimizer states, and epoch metadata.
-    - **Resuming**: Continue training from a previous checkpoint using the `--resume` flag.
-    - **Inference**: Demonstrates how to load a model for inference after training.
+1.  `train_advanced.py`: Advanced training script with checkpointing and persistence.
+2.  `metis_model/train_metis.py`: Main training script for stacked Metis models using `config.yaml`.
 
-### Usage: Advanced Training
-
-```bash
-# Start a new training session
-python3 train_advanced.py --epochs 10 --lr 1e-4
-
-# Resume training from a checkpoint
-python3 train_advanced.py --epochs 20 --resume --checkpoint math_block_checkpoint.pth
-```
-
-## Metis Black-Scholes Demo
-
-The `demo_metis_bs.py` script demonstrates a higher-level application: training a Metis-based model to perform Black-Scholes option pricing autonomously.
-
-### Key Features:
-- **Neuro-Symbolic Dataset**: Generates synthetic Black-Scholes data (S, K, T, r, sigma) and exact prices.
-- **Autonomous Inference**: Once trained, the model predicts prices by processing inputs through its `NeuroSymbolicReasoningCells` without calling explicit math functions.
-- **Checkpoint Persistence**: Automatically saves and loads `metis_bs_model.pth`.
-- **Continuous Training**: Supports loading an existing model and performing additional training epochs.
-
-### Usage:
-
-```bash
-# Run inference using existing model (skips training if checkpoint exists)
-python3 demo_metis_bs.py
-
-# Force training even if model exists
-python3 demo_metis_bs.py --train
-
-# Customize training (e.g., 50 epochs with 5000 samples)
-python3 demo_metis_bs.py --train --epochs 50 --samples 5000
-```
-
-## Large-Scale Training and Configuration
-
-The `metis_model/train_metis.py` script has been enhanced to support large-scale training using a YAML-based configuration system.
-
-### Key Enhancements:
-- **YAML Configuration**: Externalized all hyperparameters (training, model, dataset) into `config.yaml`.
-- **Model Variants**: Support for predefined variants (`tiny`, `small`, `medium`, `large`) with easy overrides.
-- **Enhanced Dataset**: `SyntheticMathDataset` for simulating structured mathematical sequences.
-- **Improved Training Loop**:
-    - **Cosine Annealing LR**: For smoother convergence.
-    - **Gradient Clipping**: To maintain stability in recurrent loops.
-    - **Workspace Regularization**: Encourages stability in latent state transitions.
-    - **Checkpointing**: Saves both periodic and "best" models based on loss.
-
-### Usage:
+### Usage: Large-Scale Training
 
 ```bash
 # Train using the default config.yaml
 python3 metis_model/train_metis.py
 
 # Specify a custom config and device
-python3 metis_model/train_metis.py --config my_large_config.yaml --device cuda
+python3 metis_model/train_metis.py --config config.yaml --device cpu
 ```
-
-### Configuration Example (`config.yaml`):
-
-```yaml
-training:
-  epochs: 10
-  batch_size: 16
-  lr: 2.0e-4
-  grad_clip: 1.0
-  checkpoint_path: "openmetis_large.pth"
-
-model:
-  variant: "small"
-  num_layers: 4
-  vocab_size: 5000
-
-dataset:
-  num_samples: 5000
-  seq_len: 64
-```
-
-## Roadmap
-
-The development of the `NeuroSymbolicReasoningCell` is planned across several phases to evolve from a latent-state recycler to a full-fledged neuro-symbolic engine.
-
-### Phase 1: Foundation (Current)
-- [x] Recurrent block architecture with latent workspace.
-- [x] Mixture-of-Experts (MoE) routing for domain specialization.
-- [x] Advanced math-specific heads (Differentiation, Integration, Simplification).
-- [x] Differentiable symbolic operations and numerical slots.
-- [x] Advanced configuration and model variants (OpenMythos-style).
-- [x] Prelude/Coda layers and LoRA depth adaptation.
-- [x] Advanced training script with checkpointing and persistence.
-
-### Phase 2: Enhanced Symbolic Integration
-- [ ] **Tree-Based Workspace**: Transition from purely latent vectors to a hybrid representation involving explicit expression trees.
-- [ ] **Rule-Based Proposals**: Integrate a library of fixed algebraic rewrite rules (simplification, expansion) as a "Symbolic Expert".
-- [ ] **Dynamic Expert Scaling**: Support for plugging in external LLMs (e.g., Qwen2.5-Math) as specialized experts via API or local weights.
-
-### Phase 3: Reasoning & Verification
-- [ ] **Self-Correction Loop**: Implement a verification-driven update where the model retries iterations if the "Verification Expert" reports low confidence.
-- [ ] **Formal Verification**: Integrate with formal solvers like Z3 or Lean for hard constraint satisfaction within the loop.
-- [ ] **Curriculum Learning**: Training pipeline for gradually increasing mathematical complexity (from arithmetic to calculus).
-
-### Phase 4: Scaling & Deployment
-- [ ] **Flash-Recurrence**: Optimize the recurrent loop for faster inference and reduced memory footprint during training.
-- [ ] **Multi-Block Stacking**: Research on stacking multiple `NeuroSymbolicReasoningCells` with hierarchical workspaces.
-- [ ] **Interpretable Reasoning Traces**: Tools to visualize and export the symbolic "scratchpad" evolution in human-readable LaTeX.
 
 ## Project Structure
 
-- `hybrid_math/`
-    - `block.py`: Main `NeuroSymbolicReasoningCell` implementation.
-    - `workspace.py`: `MathWorkspace` class managing state.
-    - `expression.py`: `MathExpression` and `SymbolicOp` utilities.
-- `metis_model/`
-    - `model.py`: `OpenMythosHybridModel` implementation.
-    - `train_metis.py`: Main training script for Metis models.
-- `demo.py`: Basic demonstration script showing math heads and gradient verification.
-- `demo_metis_bs.py`: Black-Scholes pricing demo with autonomous model inference.
-- `train_sample.py`: A basic training script template.
-- `train_advanced.py`: Advanced training script with checkpointing and resuming capabilities.
+- `nn/`: Core neural-symbolic components.
+    - `block.py`: `NeuroSymbolicReasoningCell` implementation.
+    - `workspace.py`: `MathWorkspace` managing state and history.
+    - `fin_math.py`: `FinMathTools` for deterministic financial calculations.
+    - `variants.py`: Predefined model configurations (tiny, small, medium, large).
+- `metis_model/`: High-level models and training logic.
+    - `model.py`: `OpenMetisHybridModel` (stacked layers).
+    - `train_metis.py`: Config-driven training loop.
+- `world/`: Financial mathematics environment.
+    - `environment.py`: `FinancialWorld` for task management.
+    - `data_source.py`: Synthetic financial data generation.
+- `docs/`: Documentation and architectural insights.
+- `config.yaml`: Centralized hyperparameter configuration.
+
+## Roadmap
+
+### Phase 1: Foundation (Completed)
+- [x] Recurrent block architecture with latent workspace.
+- [x] Mixture-of-Experts (MoE) routing for domain specialization.
+- [x] Stacked hierarchical layers (`OpenMetisHybridModel`).
+- [x] Tool-augmented reasoning (FinMath-Orchestrator).
+- [x] Audit trail and reasoning traces.
+
+### Phase 2: Enhanced Symbolic Integration (In Progress)
+- [ ] **Tree-Based Workspace**: Transition to hybrid representation involving explicit expression trees.
+- [ ] **Rule-Based Proposals**: Integrate algebraic rewrite rules as a "Symbolic Expert".
+- [ ] **External LLM Integration**: Support for Qwen2.5-Math as specialized experts.
+
+### Phase 3: Reasoning & Verification
+- [ ] **Self-Correction Loop**: Retrying iterations if verification confidence is low.
+- [ ] **Formal Verification**: Integration with Z3 or Lean for constraint satisfaction.

@@ -21,6 +21,7 @@ Developing neural-symbolic integration by combining transformer-style neural pro
 - **Advanced Training**: `python train_advanced.py --epochs 10 --lr 1e-4`
 - **Resume Training**: `python train_advanced.py --resume --checkpoint math_block_checkpoint.pth`
 - **Large-Scale Training**: `python metis_model/train_metis.py`
+- **Interactive Shell**: `python interact.py`
 
 ## Project Structure
 - `nn/`: Core neural-symbolic components.
