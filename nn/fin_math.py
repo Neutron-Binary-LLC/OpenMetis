@@ -151,10 +151,15 @@ class FinMathTools:
         def norm_cdf(x):
             return 0.5 * (1.0 + torch.erf(x / np.sqrt(2.0)))
             
-        if is_call:
-            return S * norm_cdf(d1) - K * torch.exp(-r * T) * norm_cdf(d2)
+        if isinstance(is_call, torch.Tensor) and is_call.dim() > 0:
+            call_price = S * norm_cdf(d1) - K * torch.exp(-r * T) * norm_cdf(d2)
+            put_price = K * torch.exp(-r * T) * norm_cdf(-d2) - S * norm_cdf(-d1)
+            return torch.where(is_call.bool(), call_price, put_price)
         else:
-            return K * torch.exp(-r * T) * norm_cdf(-d2) - S * norm_cdf(-d1)
+            if is_call:
+                return S * norm_cdf(d1) - K * torch.exp(-r * T) * norm_cdf(d2)
+            else:
+                return K * torch.exp(-r * T) * norm_cdf(-d2) - S * norm_cdf(-d1)
 
     @staticmethod
     def _binomial_tree_price(params: Dict[str, Any], steps: int = 100) -> torch.Tensor:
@@ -181,9 +186,15 @@ class FinMathTools:
         z = torch.randn((batch_size, n_sim), device=S.device if isinstance(S, torch.Tensor) else 'cpu')
         ST = S.unsqueeze(-1) * torch.exp((r - 0.5 * sigma**2) * T + sigma * torch.sqrt(T) * z)
         
-        if is_call:
-            payoffs = F.relu(ST - K.unsqueeze(-1))
+        if isinstance(is_call, torch.Tensor) and is_call.dim() > 0:
+            call_payoffs = F.relu(ST - K.unsqueeze(-1))
+            put_payoffs = F.relu(K.unsqueeze(-1) - ST)
+            is_call_expanded = is_call.bool().unsqueeze(-1).expand_as(call_payoffs)
+            payoffs = torch.where(is_call_expanded, call_payoffs, put_payoffs)
         else:
-            payoffs = F.relu(K.unsqueeze(-1) - ST)
+            if is_call:
+                payoffs = F.relu(ST - K.unsqueeze(-1))
+            else:
+                payoffs = F.relu(K.unsqueeze(-1) - ST)
             
         return torch.exp(-r * T) * payoffs.mean(dim=-1)
