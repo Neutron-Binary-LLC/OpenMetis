@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .workspace import MathWorkspace
+from .fin_math import FinMathTools
 
 
 @dataclass
@@ -287,24 +288,51 @@ class NeuroSymbolicReasoningCell(nn.Module):
         delta_latent = self.workspace_updater(combined)
 
         # Optional: Apply concrete operations to numerical slots
-        # Note: financial symbolic update disabled as per request
-        if False and workspace.numerical_values.requires_grad:
+        # Now using external deterministic tools as per recommendation in enhancev1.1.md
+        if workspace.numerical_values.requires_grad:
             # Example: numerical differentiation / integration on selected slots
             vars_tensor = workspace.numerical_values[:, :5]
             if vars_tensor.requires_grad:
-                # Black-Scholes call pricing formula incorporated directly into the gradient flow
-                bs_price = self.apply_financial(
-                    vars_tensor[:, 0], vars_tensor[:, 1], vars_tensor[:, 2], vars_tensor[:, 3], vars_tensor[:, 4]
-                )
-                grad = torch.autograd.grad(
-                    bs_price.sum(), vars_tensor, create_graph=True, allow_unused=True
-                )[0]
-                if grad is not None:
-                    # Update numerical slots with sensitivities (Greeks)
-                    # Delta (dC/dS) is grad[:, 0], Vega (dC/dSigma) is grad[:, 4]
-                    workspace.numerical_values[:, 5:10] = grad
+                # Delegate to deterministic tools
+                params = {
+                    "S": vars_tensor[:, 0],
+                    "K": vars_tensor[:, 1],
+                    "T": vars_tensor[:, 2],
+                    "r": vars_tensor[:, 3],
+                    "sigma": vars_tensor[:, 4],
+                    "is_call": True
+                }
+                
+                # 1. Price option using deterministic tool
+                bs_price = FinMathTools.price_option("black_scholes", params)
+                
+                # 2. Compute greeks using deterministic tool (which uses autograd internally)
+                greeks = FinMathTools.compute_greeks("black_scholes", params)
+                
+                # Update numerical slots with sensitivities (Greeks)
+                with torch.no_grad():
+                    if "delta" in greeks:
+                        workspace.numerical_values[:, 5] = greeks["delta"]
+                    if "gamma" in greeks:
+                        workspace.numerical_values[:, 6] = greeks["gamma"]
+                    if "vega" in greeks:
+                        workspace.numerical_values[:, 7] = greeks["vega"]
+                    if "theta" in greeks:
+                        workspace.numerical_values[:, 8] = greeks["theta"]
+                    if "rho" in greeks:
+                        workspace.numerical_values[:, 9] = greeks["rho"]
+                    
                     # Store price in slot 10
                     workspace.numerical_values[:, 10] = bs_price
+                
+                # Audit trail for tool usage
+                tool_info = {
+                    "step": step,
+                    "tool": "FinMathTools.compute_greeks",
+                    "model": "black_scholes",
+                    "output_price": bs_price.detach().mean().item()
+                }
+                workspace.step_history.append(tool_info)
 
         # Generate readable expression (for interpretability)
         delta_expr = [f"step{step}_update" for _ in range(len(global_feat))]
