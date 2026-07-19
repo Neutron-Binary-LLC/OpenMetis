@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Dict, Any, Optional, Tuple, List
+from .expression import ExpressionTree, ExpressionNode
 
 
 class MathWorkspace:
@@ -30,6 +31,7 @@ class MathWorkspace:
         self.confidence = torch.ones(batch_size, 1, device=device)
 
         self.symbolic_expr: List[str]  # Human-readable expressions (for debugging / verification)
+        self.expression_trees: List[Optional[ExpressionTree]] = [None] * batch_size
 
         # Store history of expressions (for debugging / backtracking)
         self.expression_history: List[str] = [""] * batch_size
@@ -49,17 +51,17 @@ class MathWorkspace:
         ws.step_history = []
         return ws
 
-    def update(self, delta_latent: torch.Tensor, new_confidence: Optional[torch.Tensor] = None):
-        self.latent_state = self.latent_state + delta_latent
-        if new_confidence is not None:
-            self.confidence = new_confidence
-        self.iteration_count += 1
-
-    def update(self, delta_latent: torch.Tensor, delta_expr: Optional[List[str]] = None):
+    def update(self, delta_latent: torch.Tensor, delta_expr: Optional[List[str]] = None, delta_trees: Optional[List[ExpressionTree]] = None, new_confidence: Optional[torch.Tensor] = None):
         self.latent_state = self.latent_state + delta_latent
         if delta_expr is not None:
             self.symbolic_expr = delta_expr
-        self.confidence = torch.sigmoid(self.latent_state.norm(dim=-1, keepdim=True) * 0.1)
+        if delta_trees is not None:
+            self.expression_trees = delta_trees
+        if new_confidence is not None:
+            self.confidence = new_confidence
+        else:
+            self.confidence = torch.sigmoid(self.latent_state.norm(dim=-1, keepdim=True) * 0.1)
+        self.iteration_count += 1
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -76,4 +78,5 @@ class MathWorkspace:
         new_ws.iteration_count = self.iteration_count
         new_ws.confidence = self.confidence.clone()
         new_ws.expression_history = self.expression_history.copy()
+        new_ws.expression_trees = [t for t in self.expression_trees]
         return new_ws

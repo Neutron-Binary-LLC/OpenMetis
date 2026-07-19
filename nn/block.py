@@ -7,6 +7,9 @@ import torch.nn.functional as F
 
 from .workspace import MathWorkspace
 from .fin_math import FinMathTools
+from .expression import ExpressionTree
+from .symbolic_expert import SymbolicExpert
+from .external_llm import ExternalLLMExpert
 
 
 @dataclass
@@ -255,6 +258,10 @@ class NeuroSymbolicReasoningCell(nn.Module):
                                       for t in ["algebra", "calculus", "trig", "logic", "verification"]])
         self.router = MoERouter(self.d_model, len(self.experts))
 
+        # Phase 2 Experts
+        self.symbolic_expert = SymbolicExpert(self.d_model)
+        self.external_llm_expert = ExternalLLMExpert(self.d_model)
+
         # Typed math proposal heads
         self.operation_heads = nn.ModuleDict({
             'derivative': nn.Linear(self.d_model, self.d_model),
@@ -275,7 +282,7 @@ class NeuroSymbolicReasoningCell(nn.Module):
 
         self.dropout = nn.Dropout(config.dropout)
 
-    def _propose_symbolic_update(self, h: torch.Tensor, workspace: MathWorkspace, step: int):
+    def _propose_symbolic_update(self, h: torch.Tensor, workspace: MathWorkspace, step: int, debug: bool = False):
         """Typed, structured symbolic proposal."""
         global_feat = h.mean(dim=1)  # (B, D)
 
@@ -286,6 +293,25 @@ class NeuroSymbolicReasoningCell(nn.Module):
         combined = torch.sum(gate * torch.stack(list(proposals.values()), dim=1), dim=1)
 
         delta_latent = self.workspace_updater(combined)
+
+        # 1. Symbolic Rule-Based Proposals (Tree Updates)
+        # Ensure trees are initialized from current expressions if they are None
+        current_trees = []
+        for i, tree in enumerate(workspace.expression_trees):
+            if tree is None and workspace.symbolic_expr[i] != "0":
+                try:
+                    current_trees.append(ExpressionTree.from_string(workspace.symbolic_expr[i]))
+                except Exception as e:
+                    current_trees.append(None)
+            else:
+                current_trees.append(tree)
+
+        delta_trees = self.symbolic_expert(h, current_trees)
+
+        # 2. External LLM Proposal (optional, triggered by latent state)
+        # For demo, we always call it but it could be gated
+        llm_out = self.external_llm_expert(global_feat)
+        delta_latent = delta_latent + llm_out["delta_latent"]
 
         # Optional: Apply concrete operations to numerical slots
         # Now using external deterministic tools as per recommendation in enhancev1.1.md
@@ -336,8 +362,10 @@ class NeuroSymbolicReasoningCell(nn.Module):
 
         # Generate readable expression (for interpretability)
         delta_expr = [f"step{step}_update" for _ in range(len(global_feat))]
+        if delta_trees and delta_trees[0]:
+            delta_expr = [t.to_infix() if t else delta_expr[i] for i, t in enumerate(delta_trees)]
 
-        return delta_latent, delta_expr
+        return delta_latent, delta_expr, delta_trees
 
     def forward(self, x: torch.Tensor, workspace: Optional[MathWorkspace] = None,
                 num_iterations: Optional[int] = None, debug: bool = False):
@@ -386,8 +414,8 @@ class NeuroSymbolicReasoningCell(nn.Module):
             h = h + self.dropout(moe_out)
 
             # 4. Symbolic Workspace Update
-            delta_latent, delta_expr = self._propose_symbolic_update(h, workspace, i)
-            workspace.update(delta_latent, delta_expr)
+            delta_latent, delta_expr, delta_trees = self._propose_symbolic_update(h, workspace, i, debug=debug)
+            workspace.update(delta_latent, delta_expr, delta_trees)
 
             # ACT Halting
             if torch.all(workspace.confidence > self.config.act_threshold):
