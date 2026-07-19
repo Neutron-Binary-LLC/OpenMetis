@@ -31,6 +31,7 @@ Developing neural-symbolic integration by combining transformer-style neural pro
     - `workspace.py`: `MathWorkspace`.
     - `expression.py`: Symbolic utilities and `ExpressionTree`.
     - `symbolic_expert.py`: Algebraic rewrite rules.
+    - `fin_math.py`: Financial math experts and tools.
     - `external_llm.py`: External model integration.
 - `metis_model/`: High-level model implementations.
 - `world/`: Financial mathematics environment.

@@ -45,9 +45,16 @@ If the verification confidence falls below a critical threshold (e.g., 0.3), the
 
 ## Specialized Math Experts
 The `MoERouter` directs the hidden state to specialized experts (`MathExpert`):
-- **Algebra**: Basic operations and simplification.
+- **Algebra**: Basic operations and simplification (`nn/symbolic_expert.py`).
 - **Calculus**: Derivatives and integrals.
+- **Financial**: Black-Scholes, Greeks, and market dynamics (`nn/fin_math.py`).
 - **Numerical**: Floating point precision and stabilization.
+
+## World Environment & Tasks (`world/`)
+OpenMetis interacts with a simulated financial environment to ground its reasoning:
+- **DataSource**: Generates synthetic or real market data (prices, volatility, rates).
+- **Environment**: Manages the state of financial instruments and task execution.
+- **Tasks**: Defines reasoning goals such as "Calculate Delta" or "Verify Put-Call Parity".
 
 ## Visual Testing & Conceptualization
 To rapidly test changes, use the `VisualizationAgent` hooks to plot:
