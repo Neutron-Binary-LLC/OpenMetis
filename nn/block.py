@@ -260,7 +260,7 @@ class NeuroSymbolicReasoningCell(nn.Module):
 
         # Phase 2 Experts
         self.symbolic_expert = SymbolicExpert(self.d_model)
-        self.external_llm_expert = ExternalLLMExpert(self.d_model)
+        self.external_llm_expert = ExternalLLMExpert(self.d_model, workspace_dim=config.workspace_dim)
 
         # Typed math proposal heads
         self.operation_heads = nn.ModuleDict({

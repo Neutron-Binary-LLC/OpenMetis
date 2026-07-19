@@ -36,7 +36,8 @@ class MathWorkspace:
         # Store history of expressions (for debugging / backtracking)
         self.expression_history: List[str] = [""] * batch_size
 
-        self.step_history: List[Dict]  # Optional trace
+        self.step_history: List[Dict] = []  # Optional trace
+        self.reasoning_traces: List[List[str]] = [[] for _ in range(batch_size)] # Chain of Thought traces
 
     @classmethod
     def new(cls, batch_size: int, workspace_dim: int, device: torch.device, num_slots: int = 16):

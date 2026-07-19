@@ -8,14 +8,15 @@ class ExternalLLMExpert(nn.Module):
     Expert that integrates external LLMs (e.g., Qwen2.5-Math) for complex symbolic reasoning.
     Provides support for specialized mathematical experts.
     """
-    def __init__(self, d_model: int, model_id: str = "Qwen/Qwen2.5-Math-7B-Instruct"):
+    def __init__(self, d_model: int, workspace_dim: Optional[int] = None, model_id: str = "Qwen/Qwen2.5-Math-7B-Instruct"):
         super().__init__()
         self.d_model = d_model
+        self.workspace_dim = workspace_dim or d_model
         self.model_id = model_id
         
         # Latent bridge between neural workspace and LLM "thoughts"
         self.query_proj = nn.Linear(d_model, d_model)
-        self.response_proj = nn.Linear(d_model, d_model)
+        self.response_proj = nn.Linear(d_model, self.workspace_dim)
         
     def forward(self, h: torch.Tensor, context: Optional[List[str]] = None) -> Dict[str, Any]:
         """

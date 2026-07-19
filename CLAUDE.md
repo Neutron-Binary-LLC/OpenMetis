@@ -16,8 +16,10 @@ Developing neural-symbolic integration by combining transformer-style neural pro
 - **Symbolic Heads**: Linear layers proposing updates for differentiation, integration, etc.
 
 ## Development Commands
-- **Basic Demo**: `python demo.py`
-- **Black-Scholes Demo**: `python demo_metis_bs.py`
+- **Phase 2 Demo**: `python demo_phase2.py`
+- **Orchestrator Demo**: `python demo_orchestrator.py`
+- **Black-Scholes Training Demo**: `python demo_metis_bs.py`
+- **Financial World Training**: `python train_with_world.py`
 - **Advanced Training**: `python train_advanced.py --epochs 10 --lr 1e-4`
 - **Resume Training**: `python train_advanced.py --resume --checkpoint math_block_checkpoint.pth`
 - **Large-Scale Training**: `python metis_model/train_metis.py`
@@ -27,10 +29,12 @@ Developing neural-symbolic integration by combining transformer-style neural pro
 - `nn/`: Core neural-symbolic components.
     - `block.py`: `NeuroSymbolicReasoningCell`.
     - `workspace.py`: `MathWorkspace`.
-    - `expression.py`: Symbolic utilities.
+    - `expression.py`: Symbolic utilities and `ExpressionTree`.
+    - `symbolic_expert.py`: Algebraic rewrite rules.
+    - `external_llm.py`: External model integration.
 - `metis_model/`: High-level model implementations.
+- `world/`: Financial mathematics environment.
 - `docs/`: Comprehensive documentation and agent knowledge.
-- `.claude/`: Agentic workspace definitions.
 
 ## Coding Standards
 - Use type hints for all function signatures.

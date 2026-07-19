@@ -171,10 +171,11 @@ sequenceDiagram
 
 - **Hierarchical Stacking**: Stack multiple hybrid layers (`OpenMetisHybridModel`) for deep reasoning.
 - **Tool-Augmented Reasoning (Orchestrator)**: The `NeuroSymbolicReasoningCell` acts as an orchestrator, delegating complex calculations to `FinMathTools`.
-- **Mathematical Workspace**: Persistent state carrying latent mathematical context, numerical values, and confidence scores.
-    - **Latent State**: High-dimensional vector representing the abstract mathematical context.
+- **Mathematical Workspace**: Persistent state carrying latent mathematical context, numerical values, and expression trees.
+    - **Hybrid Representation**: Combines high-dimensional latent vectors with explicit **Expression Trees** for symbolic transparency.
     - **Numerical Slots**: 16 dedicated slots for storing constants, variables, and their gradients.
-    - **Audit Trail**: Full history of tool calls and workspace updates (`step_history`).
+    - **Symbolic Expert**: Differentiable routing to algebraic rewrite rules for expression simplification.
+    - **Audit Trail**: Full history of tool calls, symbolic updates, and external LLM interactions (`step_history`).
 - **Recurrent Depth**: Shared weights across configurable iterations (default 4-8) per layer.
 - **MoE Experts**: Specialized layers for different mathematical domains (Algebra, Calculus, etc.).
 - **Differentiable Symbolic Ops**: Native support for differentiation, integration approximation, and elementary functions.
@@ -193,8 +194,22 @@ This repository follows an **Agentic Workspace** workflow (see [AGENTS.md](AGENT
 - **CodeGenerator**: Implements neural blocks and math logic.
 - **MathAgent**: Ensures numerical stability and correctness.
 - **VisualizationAgent**: Provides insights into latent states and tool usage.
+- **ProjectScaffolder**: Maintaining repository structure.
+- **Reviewer**: Code quality and performance review.
+- **TestGenerator**: Automated unit and integration testing.
+- **HealthcheckAgent**: Workspace integrity.
 
 ## Installation
+
+We recommend using [uv](https://github.com/astral-sh/uv) for fast dependency management:
+
+```bash
+uv pip install torch matplotlib pyyaml
+# Or using the lockfile
+uv sync
+```
+
+Alternatively, use standard pip:
 
 ```bash
 pip install torch matplotlib pyyaml
@@ -204,16 +219,24 @@ pip install torch matplotlib pyyaml
 
 ```python
 import torch
-from nn.block import NeuroSymbolicReasoningCell
+from nn.block import NeuroSymbolicReasoningCell, MathConfig
+
+# Initialize Configuration
+config = MathConfig(
+    dim=512,
+    workspace_dim=128,
+    max_loop_iters=6,
+    n_experts=5
+)
 
 # Initialize the block
-block = NeuroSymbolicReasoningCell(d_model=512, num_iterations=6)
+block = NeuroSymbolicReasoningCell(config=config)
 
 # Input tensor (Batch, Seq, Dim)
 x = torch.randn(2, 10, 512)
 
 # Forward pass
-output_hidden, workspace_obj = block(x)
+output_hidden, workspace_obj, trace = block(x)
 final_workspace = workspace_obj.to_dict()
 
 print(f"Final Iteration Count: {final_workspace['iteration_count']}")
@@ -242,6 +265,8 @@ We provide several demos to showcase the framework's capabilities:
 1.  **Orchestrator Demo**: `demo_orchestrator.py` - Shows tool-augmented reasoning for Black-Scholes pricing and Greeks calculation with a full audit trail.
 2.  **Visualization Demo**: `visualize_orchestrator.py` - Generates `orchestrator_trace.png` showing the consistency of tool-based reasoning.
 3.  **Metis Black-Scholes Demo**: `demo_metis_bs.py` - Demonstrates autonomous model training for option pricing.
+4.  **Symbolic Phase 2 Demo**: `demo_phase2.py` - Demonstrates the hybrid (tree + latent) workspace and rule-based symbolic experts.
+5.  **Interactive Shell**: `interact.py` - Allows interactive exploration of the model's reasoning process and tool calls.
 
 ### Running the Orchestrator Demo
 
@@ -255,6 +280,7 @@ We provide scripts for large-scale training using a YAML-based configuration sys
 
 1.  `train_advanced.py`: Advanced training script with checkpointing and persistence.
 2.  `metis_model/train_metis.py`: Main training script for stacked Metis models using `config.yaml`.
+3.  `train_with_world.py`: Training script integrated with `FinancialWorld` for financial reasoning tasks.
 
 ### Usage: Large-Scale Training
 
@@ -271,6 +297,9 @@ python3 metis_model/train_metis.py --config config.yaml --device cpu
 - `nn/`: Core neural-symbolic components.
     - `block.py`: `NeuroSymbolicReasoningCell` implementation.
     - `workspace.py`: `MathWorkspace` managing state and history.
+    - `expression.py`: `ExpressionTree` and symbolic utilities.
+    - `symbolic_expert.py`: Algebraic rewrite rules and simplification.
+    - `external_llm.py`: Integration with external math LLMs.
     - `fin_math.py`: `FinMathTools` for deterministic financial calculations.
     - `variants.py`: Predefined model configurations (tiny, small, medium, large).
 - `metis_model/`: High-level models and training logic.
@@ -279,6 +308,7 @@ python3 metis_model/train_metis.py --config config.yaml --device cpu
 - `world/`: Financial mathematics environment.
     - `environment.py`: `FinancialWorld` for task management.
     - `data_source.py`: Synthetic financial data generation.
+    - `tasks.py`: Financial task definitions (Pricing, Greeks, IV).
 - `docs/`: Documentation and architectural insights.
 - `config.yaml`: Centralized hyperparameter configuration.
 
@@ -291,11 +321,12 @@ python3 metis_model/train_metis.py --config config.yaml --device cpu
 - [x] Tool-augmented reasoning (FinMath-Orchestrator).
 - [x] Audit trail and reasoning traces.
 
-### Phase 2: Enhanced Symbolic Integration (In Progress)
-- [ ] **Tree-Based Workspace**: Transition to hybrid representation involving explicit expression trees.
-- [ ] **Rule-Based Proposals**: Integrate algebraic rewrite rules as a "Symbolic Expert".
-- [ ] **External LLM Integration**: Support for Qwen2.5-Math as specialized experts.
+### Phase 2: Enhanced Symbolic Integration (Completed)
+- [x] **Tree-Based Workspace**: Transition to hybrid representation involving explicit expression trees.
+- [x] **Rule-Based Proposals**: Integrate algebraic rewrite rules as a "Symbolic Expert".
+- [x] **External LLM Integration**: Support for Qwen2.5-Math as specialized experts.
 
-### Phase 3: Reasoning & Verification
+### Phase 3: Reasoning & Verification (In Progress)
 - [ ] **Self-Correction Loop**: Retrying iterations if verification confidence is low.
 - [ ] **Formal Verification**: Integration with Z3 or Lean for constraint satisfaction.
+- [ ] **Reasoning Traces for LLMs**: Generating chain-of-thought data for fine-tuning.
