@@ -24,10 +24,14 @@ class Z3VerificationExpert(nn.Module):
         trees: List of current expression trees
         numerical_values: (batch, num_slots)
         """
-        if z3 is None:
-            return {"status": "error", "message": "Z3 not installed"}
-            
         batch_size = h.shape[0]
+        if z3 is None:
+            return {
+                "results": [{"verified": False, "reason": "Z3 not installed"}] * batch_size,
+                "confidences": torch.full((batch_size, 1), 0.5, device=h.device),
+                "status": "error",
+                "message": "Z3 not installed"
+            }
         results = []
         confidences = []
         
