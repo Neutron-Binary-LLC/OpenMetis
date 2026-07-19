@@ -167,6 +167,80 @@ sequenceDiagram
     B->>I: Return (Output, Final Workspace)
 ```
 
+## Detailed Architecture & Formal Verification
+
+The following diagrams provide an academic-level view of the advanced reasoning mechanisms introduced in Phase 3.
+
+### 1. Hybrid Mathematical Workspace
+
+The workspace is a triple-redundant system that ensures consistency across neural, numerical, and symbolic domains.
+
+```mermaid
+graph TD
+    subgraph Hybrid_Workspace [Hybrid Mathematical Workspace]
+        direction TB
+        subgraph Neural_Pillar [Neural Reasoning]
+            LS[Latent State Vector<br/>Contextual Math Representation]
+        end
+        subgraph Numerical_Pillar [Deterministic Calculation]
+            NS[Numerical Slots<br/>Values, Sensitivities & Gradients]
+        end
+        subgraph Symbolic_Pillar [Formal Reasoning]
+            ET[Expression Trees<br/>AST-based Algebraic Structure]
+            SE[Symbolic Expert<br/>Rewrite Rules & Simplification]
+        end
+        
+        LS <-->|Projection| NS
+        LS <-->|Translation| ET
+        ET -->|Semantic Update| SE
+        SE -->|Refined Tree| ET
+    end
+```
+
+### 2. Self-Correction & Verification Loop
+
+OpenMetis employs an autonomous self-correction mechanism. If the formal verification expert detects a logical inconsistency or low confidence, the model backtracks, perturbs the hidden state, and explores an alternative reasoning path.
+
+```mermaid
+graph TD
+    Start[Start Recurrent Iteration] --> Neural[Neural Processing<br/>Attention & MoE Experts]
+    Neural --> Proposal[Reasoning Proposal<br/>Tree Update & Latent Delta]
+    Proposal --> Verify[Formal Verification<br/>Z3 SMT Expert]
+    Verify --> Decision{Confidence > Threshold?}
+    Decision -- Yes --> Commit[Commit Update]
+    Decision -- No --> Retry{Retries < Max?}
+    Retry -- Yes --> Backtrack[Backtrack & State Perturbation]
+    Backtrack --> Neural
+    Retry -- No --> Fallback[Commit Fallback State]
+    Commit --> ACT[ACT Halting Check]
+    Fallback --> ACT
+    ACT --> End[End Iteration]
+```
+
+### 3. Formal Verification Flow (Z3 SMT Expert)
+
+The formal verification expert translates expression trees into SMT-LIB compatible logic to prove properties like positivity, equality, or consistency.
+
+```mermaid
+sequenceDiagram
+    participant C as Reasoning Cell
+    participant V as Z3 Expert
+    participant S as Z3 Solver
+    
+    C->>V: verify(hidden_state, tree, goal)
+    Note over V: Goals: Positivity, Equality, Consistency
+    V->>V: Recursive tree_to_z3 translation
+    V->>S: Add Constraints (z3_expr)
+    V->>S: solver.check()
+    alt Status is SAT
+        S-->>V: Verified / Sat
+        V-->>C: {verified: True, confidence: 1.0}
+    else Status is UNSAT (Counterexample)
+        S-->>V: Failure / Unsat
+        V-->>C: {verified: False, confidence: 0.2}
+    end
+```
+
 ## Key Features
 
 - **Hierarchical Stacking**: Stack multiple hybrid layers (`OpenMetisHybridModel`) for deep reasoning.
@@ -175,8 +249,11 @@ sequenceDiagram
     - **Hybrid Representation**: Combines high-dimensional latent vectors with explicit **Expression Trees** for symbolic transparency.
     - **Numerical Slots**: 16 dedicated slots for storing constants, variables, and their gradients.
     - **Symbolic Expert**: Differentiable routing to algebraic rewrite rules for expression simplification.
+    - **Formal Verification**: Native integration with Z3 for rigorous mathematical constraint checking.
+    - **Self-Correction Loop**: Autonomous backtracking and state perturbation when verification confidence drops.
     - **Audit Trail**: Full history of tool calls, symbolic updates, and external LLM interactions (`step_history`).
 - **Recurrent Depth**: Shared weights across configurable iterations (default 4-8) per layer.
+- **Reasoning Traces**: Comprehensive step-by-step logs of the model's internal logic and verification status.
 - **MoE Experts**: Specialized layers for different mathematical domains (Algebra, Calculus, etc.).
 - **Differentiable Symbolic Ops**: Native support for differentiation, integration approximation, and elementary functions.
 
@@ -326,7 +403,12 @@ python3 metis_model/train_metis.py --config config.yaml --device cpu
 - [x] **Rule-Based Proposals**: Integrate algebraic rewrite rules as a "Symbolic Expert".
 - [x] **External LLM Integration**: Support for Qwen2.5-Math as specialized experts.
 
-### Phase 3: Reasoning & Verification (In Progress)
-- [ ] **Self-Correction Loop**: Retrying iterations if verification confidence is low.
-- [ ] **Formal Verification**: Integration with Z3 or Lean for constraint satisfaction.
-- [ ] **Reasoning Traces for LLMs**: Generating chain-of-thought data for fine-tuning.
+### Phase 3: Reasoning & Verification (Completed)
+- [x] **Self-Correction Loop**: Retrying iterations if verification confidence is low.
+- [x] **Formal Verification**: Integration with Z3 for rigorous constraint satisfaction.
+- [x] **Reasoning Traces**: Generating detailed chain-of-thought data for interpretability and auditability.
+
+### Phase 4: Scaling & Deployment (In Progress)
+- [ ] **Distributed Training**: Support for FSDP and multi-node training.
+- [ ] **Lean Integration**: Moving beyond Z3 to formal proofs in Lean.
+- [ ] **Interactive Visualizer**: Real-time dashboard for the reasoning workspace.

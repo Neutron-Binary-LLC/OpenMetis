@@ -1,3 +1,4 @@
+import pytest
 import torch
 import sys
 import os
@@ -10,19 +11,20 @@ from nn.workspace import MathWorkspace
 from nn.symbolic_expert import SymbolicExpert
 from nn.block import NeuroSymbolicReasoningCell, MathConfig
 
-def test_expression_tree():
-    print("Testing ExpressionTree...")
+@pytest.fixture
+def tree():
     # (x + 0) * 1
     x = ExpressionNode("x")
     zero = ExpressionNode("0")
     one = ExpressionNode("1")
     plus = ExpressionNode("+", [x, zero])
     mult = ExpressionNode("*", [plus, one])
-    tree = ExpressionTree(mult)
-    
+    return ExpressionTree(mult)
+
+def test_expression_tree(tree):
+    print("Testing ExpressionTree...")
     print(f"Original: {tree.to_infix()}")
     assert tree.to_infix() == "((x + 0) * 1)"
-    return tree
 
 def test_symbolic_expert(tree):
     print("Testing SymbolicExpert...")
@@ -52,7 +54,7 @@ def test_workspace_with_trees():
 
 def test_cell_integration():
     print("Testing NeuroSymbolicReasoningCell integration...")
-    config = MathConfig(dim=128, workspace_dim=128, max_loop_iters=2)
+    config = MathConfig(dim=128, workspace_dim=128, max_loop_iters=2, act_threshold=1.1) # Set high threshold to avoid early stop
     cell = NeuroSymbolicReasoningCell(config)
     
     x = torch.randn(1, 10, 128)

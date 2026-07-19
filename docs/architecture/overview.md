@@ -15,11 +15,25 @@ A recurrent transformer-style block that iterates over a hidden state and a `Mat
   - `trig_head`, `exp_log_head`, `pow_head`: Elementary functions.
 
 ### 2. MathWorkspace (`nn/workspace.py`)
-A persistent container for the mathematical state.
+A persistent container for the mathematical state, now using a hybrid representation.
 - **Latent State**: High-dimensional vector representing abstract math context.
-- **Numerical Values**: Tensor of slots (default 16) for constants and evaluation points.
-- **Confidence**: Scalar [0, 1] indicating the model's certainty.
-- **Symbolic History**: Tracks the evolution of expressions across iterations.
+- **Numerical Slots**: Tensor of slots (default 16) for constants, variables, and gradients.
+- **Expression Trees**: AST-based symbolic representation for formal reasoning and interpretability.
+- **Confidence**: Vector [0, 1] indicating the model's certainty for each batch item.
+- **Reasoning Traces**: Step-by-step history of symbolic updates, verification statuses, and tool calls.
+
+## Reasoning & Verification Logic
+
+### Formal Verification (Phase 3)
+The framework integrates **Z3 SMT Solver** to rigorously verify mathematical properties proposed by the neural core.
+- **Goals**: The model can select verification goals such as *Consistency*, *Positivity*, or *Equality*.
+- **SMT Translation**: Expression trees are recursively translated into Z3 symbolic expressions.
+
+### Self-Correction Loop
+If the verification confidence falls below a critical threshold (e.g., 0.3), the `NeuroSymbolicReasoningCell` performs:
+1. **Backtracking**: Reverts the workspace to the state before the failed proposal.
+2. **Perturbation**: Adds a small noise to the hidden state to encourage exploration of alternative reasoning branches.
+3. **Retry**: Re-runs the iteration with the perturbed state.
 
 ## Data Flow
 1. **Input**: Initial hidden state $h_0$ and empty `MathWorkspace`.

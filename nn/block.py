@@ -10,6 +10,7 @@ from .fin_math import FinMathTools
 from .expression import ExpressionTree
 from .symbolic_expert import SymbolicExpert
 from .external_llm import ExternalLLMExpert
+from .verification import Z3VerificationExpert
 
 
 @dataclass
@@ -261,6 +262,7 @@ class NeuroSymbolicReasoningCell(nn.Module):
         # Phase 2 Experts
         self.symbolic_expert = SymbolicExpert(self.d_model)
         self.external_llm_expert = ExternalLLMExpert(self.d_model, workspace_dim=config.workspace_dim)
+        self.verification_expert = Z3VerificationExpert(self.d_model)
 
         # Typed math proposal heads
         self.operation_heads = nn.ModuleDict({
@@ -282,7 +284,7 @@ class NeuroSymbolicReasoningCell(nn.Module):
 
         self.dropout = nn.Dropout(config.dropout)
 
-    def _propose_symbolic_update(self, h: torch.Tensor, workspace: MathWorkspace, step: int, debug: bool = False):
+    def _propose_symbolic_update(self, h: torch.Tensor, workspace: MathWorkspace, step: int, debug: bool = False, forced_goal: Optional[int] = None):
         """Typed, structured symbolic proposal."""
         global_feat = h.mean(dim=1)  # (B, D)
 
@@ -308,7 +310,11 @@ class NeuroSymbolicReasoningCell(nn.Module):
 
         delta_trees = self.symbolic_expert(h, current_trees)
 
-        # 2. External LLM Proposal (optional, triggered by latent state)
+        # 2. Formal Verification step
+        verify_out = self.verification_expert(global_feat, delta_trees, workspace.numerical_values, forced_goal=forced_goal)
+        new_confidence = verify_out["confidences"]
+
+        # 3. External LLM Proposal (optional, triggered by latent state)
         # For demo, we always call it but it could be gated
         llm_out = self.external_llm_expert(global_feat)
         delta_latent = delta_latent + llm_out["delta_latent"]
@@ -356,19 +362,26 @@ class NeuroSymbolicReasoningCell(nn.Module):
                     "step": step,
                     "tool": "FinMathTools.compute_greeks",
                     "model": "black_scholes",
-                    "output_price": bs_price.detach().mean().item()
+                    "output_price": bs_price.detach().mean().item(),
+                    "verified": verify_out["results"][0]["verified"] if verify_out["results"] else False
                 }
                 workspace.step_history.append(tool_info)
 
         # Generate readable expression (for interpretability)
         delta_expr = [f"step{step}_update" for _ in range(len(global_feat))]
+        reasoning_steps = []
+        for i in range(len(global_feat)):
+            v_res = verify_out["results"][i] if i < len(verify_out["results"]) else {"verified": False, "reason": "unknown"}
+            step_desc = f"Iteration {step}: Proposing symbolic update. Verification: {'Success' if v_res['verified'] else 'Failure'} ({v_res['reason']})."
+            reasoning_steps.append(step_desc)
+
         if delta_trees and delta_trees[0]:
             delta_expr = [t.to_infix() if t else delta_expr[i] for i, t in enumerate(delta_trees)]
 
-        return delta_latent, delta_expr, delta_trees
+        return delta_latent, delta_expr, delta_trees, new_confidence, reasoning_steps
 
     def forward(self, x: torch.Tensor, workspace: Optional[MathWorkspace] = None,
-                num_iterations: Optional[int] = None, debug: bool = False):
+                num_iterations: Optional[int] = None, debug: bool = False, forced_goal: Optional[int] = None):
 
         batch_size, seq_len, _ = x.shape
         iters = num_iterations or self.config.max_loop_iters
@@ -413,9 +426,27 @@ class NeuroSymbolicReasoningCell(nn.Module):
 
             h = h + self.dropout(moe_out)
 
-            # 4. Symbolic Workspace Update
-            delta_latent, delta_expr, delta_trees = self._propose_symbolic_update(h, workspace, i, debug=debug)
-            workspace.update(delta_latent, delta_expr, delta_trees)
+            # 4. Symbolic Workspace Update with Self-Correction Loop
+            # Clone workspace for potential backtracking if verification fails
+            ws_before = workspace.clone()
+            
+            delta_latent, delta_expr, delta_trees, new_conf, reasoning = self._propose_symbolic_update(h, workspace, i, debug=debug, forced_goal=forced_goal)
+            workspace.update(delta_latent, delta_expr, delta_trees, new_conf, reasoning)
+
+            # Self-Correction: if confidence drops significantly, retry with a perturbation or backtrack
+            if torch.any(workspace.confidence < 0.3) and i < iters - 1:
+                if debug:
+                    print(f"Iteration {i}: Low confidence ({workspace.confidence.mean().item():.4f}). Retrying...")
+                
+                # Simple self-correction: backtrack and add noise to hidden state to explore different branch
+                workspace.latent_state.data = ws_before.latent_state.data
+                workspace.confidence.data = ws_before.confidence.data
+                h = h + torch.randn_like(h) * 0.01 
+                
+                # Record retry in reasoning trace
+                for idx in range(batch_size):
+                    workspace.reasoning_traces[idx].append(f"Iteration {i}: Confidence too low. Backtracking and retrying with perturbation.")
+                continue
 
             # ACT Halting
             if torch.all(workspace.confidence > self.config.act_threshold):

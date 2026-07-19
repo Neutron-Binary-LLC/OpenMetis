@@ -52,7 +52,7 @@ class MathWorkspace:
         ws.step_history = []
         return ws
 
-    def update(self, delta_latent: torch.Tensor, delta_expr: Optional[List[str]] = None, delta_trees: Optional[List[ExpressionTree]] = None, new_confidence: Optional[torch.Tensor] = None):
+    def update(self, delta_latent: torch.Tensor, delta_expr: Optional[List[str]] = None, delta_trees: Optional[List[ExpressionTree]] = None, new_confidence: Optional[torch.Tensor] = None, reasoning_steps: Optional[List[str]] = None):
         self.latent_state = self.latent_state + delta_latent
         if delta_expr is not None:
             self.symbolic_expr = delta_expr
@@ -62,7 +62,24 @@ class MathWorkspace:
             self.confidence = new_confidence
         else:
             self.confidence = torch.sigmoid(self.latent_state.norm(dim=-1, keepdim=True) * 0.1)
+        
+        if reasoning_steps is not None:
+            for i, step in enumerate(reasoning_steps):
+                self.reasoning_traces[i].append(step)
+        
         self.iteration_count += 1
+
+    def get_reasoning_dataset(self) -> List[Dict[str, Any]]:
+        """Export reasoning traces in a format suitable for LLM fine-tuning."""
+        dataset = []
+        for i in range(self.batch_size):
+            dataset.append({
+                "instruction": f"Solve and verify: {self.expression_history[i]}",
+                "reasoning_trace": "\n".join(self.reasoning_traces[i]),
+                "final_answer": self.symbolic_expr[i],
+                "confidence": self.confidence[i].item()
+            })
+        return dataset
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -80,4 +97,6 @@ class MathWorkspace:
         new_ws.confidence = self.confidence.clone()
         new_ws.expression_history = self.expression_history.copy()
         new_ws.expression_trees = [t for t in self.expression_trees]
+        new_ws.reasoning_traces = [t.copy() for t in self.reasoning_traces]
+        new_ws.step_history = self.step_history.copy()
         return new_ws
